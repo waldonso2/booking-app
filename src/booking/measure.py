@@ -16,13 +16,14 @@ from urllib.parse import quote, urlsplit
 from playwright.sync_api import Page, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-# Country → the currency its point of sale shows. Only currencies with an ECB reference rate, so every price can
-# be converted to EUR; each country needs a cloud region of its own (docs/TESTLAEUFE.md).
+# Country → the currency its point of sale shows (40 countries). Only currencies with an ECB reference rate, so every
+# price can be converted to EUR.
 COUNTRIES = {
-    "AU": "AUD", "BR": "BRL", "CA": "CAD", "CH": "CHF", "DE": "EUR", "ES": "EUR", "FR": "EUR", "GB": "GBP",
-    "HK": "HKD", "ID": "IDR", "IE": "EUR", "IL": "ILS", "IN": "INR", "IT": "EUR", "JP": "JPY", "KR": "KRW",
-    "MX": "MXN", "MY": "MYR", "NL": "EUR", "NO": "NOK", "NZ": "NZD", "PL": "PLN", "SE": "SEK", "SG": "SGD",
-    "US": "USD", "ZA": "ZAR",
+    "AT": "EUR", "AU": "AUD", "BE": "EUR", "BG": "EUR", "BR": "BRL", "CA": "CAD", "CH": "CHF", "CZ": "CZK",
+    "DE": "EUR", "DK": "DKK", "ES": "EUR", "FI": "EUR", "FR": "EUR", "GB": "GBP", "GR": "EUR", "HK": "HKD",
+    "HU": "HUF", "ID": "IDR", "IE": "EUR", "IL": "ILS", "IN": "INR", "IS": "ISK", "IT": "EUR", "JP": "JPY",
+    "KR": "KRW", "MX": "MXN", "MY": "MYR", "NL": "EUR", "NO": "NOK", "NZ": "NZD", "PH": "PHP", "PL": "PLN",
+    "PT": "EUR", "RO": "RON", "SE": "SEK", "SG": "SGD", "TH": "THB", "TR": "TRY", "US": "USD", "ZA": "ZAR",
 }
 CABINS = ("economy", "premium economy", "business", "first")
 AGENT = "BookingResearch/0.1"  # the token robots.txt rules are read for

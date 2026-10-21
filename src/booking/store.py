@@ -79,3 +79,23 @@ def prices(db: sqlite3.Connection, query: str) -> list[sqlite3.Row]:
         "SELECT runs.country, runs.started, step, label, amount, prices.currency, eur FROM prices"
         " JOIN runs ON prices.run = runs.id WHERE query = ?"
         " ORDER BY eur IS NULL, CAST(eur AS REAL) DESC, country", (query,)).fetchall()
+
+
+def report(db: sqlite3.Connection, step: str = "Buchungsoptionen") -> str:
+    """Markdown per query: every price of the last step highest first, the cheapest per country, and failed runs."""
+    out = []
+    for q in queries(db):
+        rows = [p for p in prices(db, q["query"]) if p["step"] == step]
+        out += [f"## {q['query']}", "", "| # | EUR | Preis | Land | Anbieter |", "|---|---|---|---|---|"]
+        out += [f"| {i} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | {p['country']} | "
+                f"{p['label'].split(' · ')[0][:60]} |" for i, p in enumerate(rows, 1)]
+        cheapest: dict[str, sqlite3.Row] = {}
+        for p in rows:  # highest first, so the last one per country is its cheapest
+            cheapest[p["country"]] = p
+        best = sorted(cheapest.values(), key=lambda p: float(p["eur"] or "inf"))
+        out += ["", "Günstigster Preis je Land:", "", "| Land | EUR | Preis | Anbieter |", "|---|---|---|---|"]
+        out += [f"| {p['country']} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | "
+                f"{p['label'].split(' · ')[0][:60]} |" for p in best]
+        failed = [f"{r['country']} ({r['status']})" for r in runs(db, q["query"]) if r["status"] != "ok"]
+        out += ["", f"Läufe: {len(runs(db, q['query']))}, ohne Ergebnis: {', '.join(failed) or 'keine'}", ""]
+    return "\n".join(out)

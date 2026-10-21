@@ -1,16 +1,35 @@
-name: Messung (USA)
+name: Messung (40 Länder)
 
-# One measurement from a GitHub runner (US) against the real site, for checking the flow before the
-# country comparison on cloud VMs (docs/TESTLAEUFE.md). Results: the run's summary and the artifact "runs".
+# One flight query, measured for 40 points of sale at once: each job sets Google Flights' own location setting
+# (gl) and the country's currency. The runners stand in the US, so this compares what Google shows for each chosen
+# location, not what a visitor from that country's network would see (docs/TESTLAEUFE.md). The job "report" imports
+# every run and writes all prices of the booking options, highest first, to the run's summary page.
 on:
   workflow_dispatch:
     inputs:
       contact:
         description: Kontakt der Forschungsgruppe (steht im User-Agent)
         required: true
+      from:
+        description: Abflughafen (IATA)
+        default: FRA
+      to:
+        description: Zielflughafen (IATA)
+        default: ATL
+      depart:
+        description: Hinflug (JJJJ-MM-TT)
+        default: "2027-03-26"
+      return:
+        description: Rückflug (JJJJ-MM-TT)
+        default: "2027-04-09"
+      cabin:
+        description: Klasse (economy, premium economy, business, first)
+        default: business
       pick:
-        description: Text des Hinflugs, der weiterverfolgt wird (leer = erster)
-        default: ""
+        description: Text des Hinflugs, der in jedem Land weiterverfolgt wird (leer = erster der Strecke)
+        default: "10:30 AM"
+  push:
+    branches: [ccr-db7c1d22-itd9x5]  # shortcut: runs on the work branch while the study flow is checked, remove after
 
 permissions:
   contents: read
@@ -20,8 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 20
       matrix:
-        to: [ATL, MNL]
+        country: [AT, AU, BE, BG, BR, CA, CH, CZ, DE, DK, ES, FI, FR, GB, GR, HK, HU, ID, IE, IL,
+                  IN, IS, IT, JP, KR, MX, MY, NL, NO, NZ, PH, PL, PT, RO, SE, SG, TH, TR, US, ZA]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,25 +55,49 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: measure
         env:
-          TO: ${{ matrix.to }}
-          CONTACT: ${{ inputs.contact }}
-          PICK: ${{ inputs.pick }}
+          COUNTRY: ${{ matrix.country }}
+          CONTACT: ${{ inputs.contact || 'www.contact.com' }}
+          FROM: ${{ inputs.from || 'FRA' }}
+          TO: ${{ inputs.to || 'ATL' }}
+          DEPART: ${{ inputs.depart || '2027-03-26' }}
+          RETURN: ${{ inputs.return || '2027-04-09' }}
+          CABIN: ${{ inputs.cabin || 'business' }}
+          PICK: ${{ github.event_name == 'push' && '10:30 AM' || inputs.pick }}
+        # A country without a result is a result too: the job stays green and "report" lists it.
         run: |
-          booking-app measure --country US --from FRA --to "$TO" --depart 2027-03-26 --return 2027-04-09 \
-            --cabin business --contact "$CONTACT" --pick "$PICK" --out "runs/$TO" || status=$?
-          {
-            echo "## FRA → $TO"
-            echo '```json'
-            cat "runs/$TO/result.json"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          cat "runs/$TO/result.json"
-          if [ -f "runs/$TO/error.txt" ]; then head -c 6000 "runs/$TO/error.txt"; fi
-          if [ -f "runs/$TO/3-Buchungsoptionen.rows.html" ]; then head -c 30000 "runs/$TO/3-Buchungsoptionen.rows.html"; fi
-          python -c 'import json, sys; r = json.load(open(sys.argv[1])); print("\n==", r["status"], r["error"], r["cabin_shown"]); [print("==", s["name"], len(s["rows"]), s["url"][:80]) for s in r["steps"]]; [print("  ", x["amount"], x["currency"], x["label"][:90]) for x in (r["steps"] or [{"rows": []}])[-1]["rows"]]' "runs/$TO/result.json"
-          exit "${status:-0}"
+          booking-app measure --country "$COUNTRY" --from "$FROM" --to "$TO" --depart "$DEPART" --return "$RETURN" \
+            --cabin "$CABIN" --contact "$CONTACT" --pick "$PICK" --out "runs/$COUNTRY" || true
+          python -c 'import json, sys; r = json.load(open(sys.argv[1])); print("==", r["status"], r["error"][:300]); [print("==", s["name"], len(s["rows"])) for s in r["steps"]]' "runs/$COUNTRY/result.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: runs-${{ matrix.to }}
+          name: run-${{ matrix.country }}
           path: runs/
+
+  report:
+    needs: measure
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: "pip install --require-hashes --only-binary :all: -r requirements.txt"
+      - run: pip install --no-deps --no-build-isolation -e .
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: run-*
+          path: runs/
+      - run: booking-app import runs
+        env:
+          BOOKING_DB: messungen.db
+      - run: booking-app report | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          BOOKING_DB: messungen.db
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: messungen
+          path: messungen.db

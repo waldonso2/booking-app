@@ -27,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--out", required=True, type=Path)
     i = sub.add_parser("import", help="import result.json files into the database")
     i.add_argument("folder", type=Path)
+    sub.add_parser("report", help="all prices of the booking options as Markdown, highest first")
     sub.add_parser("serve", help="the results page on http://127.0.0.1:8000")
     a = p.parse_args(argv)
 
@@ -42,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     db = store.connect(Path(os.environ.get("BOOKING_DB", "data/messungen.db")))
     if a.command == "import":
         print(f"{store.import_runs(db, a.folder, store.ecb_rates())} Läufe importiert")
+        return 0
+    if a.command == "report":
+        print(store.report(db))
         return 0
     from .main import run
 
