@@ -11,8 +11,6 @@ on:
       pick:
         description: Text des Hinflugs, der weiterverfolgt wird (leer = erster)
         default: ""
-  push:
-    branches: [ccr-db7c1d22-itd9x5]  # shortcut: runs on the work branch while the flow is checked, remove after
 
 permissions:
   contents: read
@@ -37,7 +35,7 @@ jobs:
       - name: measure
         env:
           TO: ${{ matrix.to }}
-          CONTACT: ${{ inputs.contact || 'www.contact.com' }}
+          CONTACT: ${{ inputs.contact }}
           PICK: ${{ inputs.pick }}
         run: |
           booking-app measure --country US --from FRA --to "$TO" --depart 2027-03-26 --return 2027-04-09 \
