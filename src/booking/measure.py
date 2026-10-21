@@ -219,6 +219,8 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
             except Exception as e:  # recorded with a screenshot: a failed step is a result too
                 result.status, result.error = "error", f"{type(e).__name__}: {e}"[:500]
                 page.screenshot(path=out / "error.png", full_page=True)
+            if result.status != "ok":  # what the page said, to see why without the screenshot
+                (out / "error.txt").write_text(f"{page.url}\n\n{page.inner_text('body')}", encoding="utf-8")
             browser.close()
     text = json.dumps(asdict(result), ensure_ascii=False, indent=1, default=str)
     (out / "result.json").write_text(text, encoding="utf-8")

@@ -68,6 +68,7 @@ def test_a_page_without_prices_is_an_error_with_screenshot(fake, tmp_path, monke
     monkeypatch.setattr(measure, "WAIT_MS", 1000)
     r = run(url + "/nothing-here", tmp_path)
     assert r.status == "error" and (tmp_path / "error.png").exists()
+    assert "/nothing-here" in (tmp_path / "error.txt").read_text()
 
 
 def test_search_url_carries_country_currency_and_cabin():
