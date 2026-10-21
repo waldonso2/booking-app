@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>PLACEHOLDER: the first page. Every new page goes into <code>PAGES</code> in <code>tests/conftest.py</code>, so the
+browser test checks it.</p>
+<table>
+  <caption class="sr-only">Beispieltabelle</caption>
+  <thead><tr><th scope="col">Name</th><th scope="col">Wert</th></tr></thead>
+  <tbody><tr><td data-label="Name">Beispiel</td><td data-label="Wert">1</td></tr></tbody>
+</table>
+{% endblock %}

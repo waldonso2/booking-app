@@ -1,18 +1,74 @@
 name: CI
 
-# The kit checks itself with its own workflows.
 on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, for vulnerabilities found after a release in the locked versions (pip-audit).
+  schedule:
+    - cron: "17 5 * * 1"
 
 permissions:
   contents: read
 
+# Actions and the shared workflows are pinned to a commit (a tag can be moved); Dependabot keeps them current.
 jobs:
   secrets:
-    uses: ./.github/workflows/secrets.yml
+    uses: waldonso2/quality-kit/.github/workflows/secrets.yml@2070c7e1ee07901a7313f6a005be303aa44acc04 # v1
   workflows:
-    uses: ./.github/workflows/workflows.yml
+    uses: waldonso2/quality-kit/.github/workflows/workflows.yml@2070c7e1ee07901a7313f6a005be303aa44acc04 # v1
   dependency-review:
-    uses: ./.github/workflows/dependency-review.yml
+    uses: waldonso2/quality-kit/.github/workflows/dependency-review.yml@2070c7e1ee07901a7313f6a005be303aa44acc04 # v1
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      # The versions users get (requirements.txt), then the test tools - both hash-checked, wheels only.
+      - run: "pip install --require-hashes --only-binary :all: -r requirements.txt"
+      - run: pip install --no-deps --no-build-isolation -e .
+      - run: "pip install --require-hashes --only-binary :all: -r requirements-dev.txt"
+      - run: pip check
+      - run: ruff check src tests
+      - run: mypy src
+      # The browser for the UI checks (axe, CSP, phone width); the version matches the locked playwright.
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest -q --cov=booking --cov-report=term:skip-covered
+
+  audit:
+    # Known vulnerabilities in the locked runtime versions: a finding fails the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: "pip install --require-hashes --only-binary :all: -r requirements-dev.txt"
+      - run: pip-audit -r requirements.txt --require-hashes --disable-pip --progress-spinner off
+
+  performance:
+    # Measured and reported on the run's summary page (KENNZAHLEN.md), never failing the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: "pip install --require-hashes --only-binary :all: -r requirements.txt"
+      - run: pip install --no-deps --no-build-isolation -e .
+      - run: "pip install --require-hashes --only-binary :all: -r requirements-dev.txt"
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest tests/perf_report.py -q
+        continue-on-error: true

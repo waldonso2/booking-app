@@ -1,0 +1,10 @@
+# Test and lint tools of the CI (scripts/lock.sh locks them into requirements-dev.txt, with hashes, constrained to
+# the runtime versions of requirements.txt). playwright + axe-playwright-python: the browser checks of the UI.
+pytest
+pytest-cov
+httpx
+ruff
+mypy
+pip-audit
+playwright
+axe-playwright-python

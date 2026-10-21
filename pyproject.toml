@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "booking-app"
+version = "0.1.0"
+description = "PLACEHOLDER"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "fastapi>=0.115",
+  "jinja2>=3.1",
+  "uvicorn>=0.30",
+]
+
+[project.scripts]
+booking-app = "booking.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+booking = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.report]
+fail_under = 90
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C901", "S", "SIM", "PERF", "C4", "RUF"]
+ignore = [
+  "RUF001", "RUF002", "RUF003",  # German texts use typographic characters on purpose
+  "S603", "S607",  # subprocess with fixed argument lists, never a shell
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["C901", "S", "RUF012", "RUF043", "RUF059"]  # asserts, fabricated secrets; fakes and fixtures
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
