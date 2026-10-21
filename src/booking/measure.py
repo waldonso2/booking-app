@@ -181,8 +181,9 @@ def _click(page: Page, index: int) -> None:
     try:
         target.click(timeout=5000)
     except PlaywrightTimeout:  # a link laid over the row can be hidden from the mouse: the keyboard reaches it
-        target.focus()
-        target.press("Enter")
+        if row.count():  # unless the click went through after all and the page moved on
+            target.focus()
+            target.press("Enter")
     page.wait_for_timeout(2000)  # a pause like a reader's, and time for the next view
 
 
