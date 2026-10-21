@@ -40,7 +40,8 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     assert [s.name for s in r.steps] == ["Hinflug", "Rückflug", "Buchungsoptionen"]
     assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]  # flights only, not the summary
     assert any(p.startswith("/return?") and p.endswith("row=1") for p in requests)  # the picked flight
-    assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel", "amount": "2290.50", "currency": "USD"}
+    assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel · Weiter", "amount": "2290.50",
+                                  "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent
     assert not any(p.startswith("/pay") for p in requests) and "/consent" in requests
     saved = json.loads((tmp_path / "result.json").read_text())
