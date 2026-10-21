@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<h2>Läufe</h2>
+<table>
+  <caption class="sr-only">Läufe je Land</caption>
+  <thead><tr><th scope="col">Land</th><th scope="col">Standort laut IP</th><th scope="col">Start (UTC)</th><th scope="col">Status</th><th scope="col">Klasse angezeigt</th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr>
+    <td data-label="Land">{{ r.country }}</td>
+    <td data-label="Standort laut IP">{{ r.ip_country or "–" }}{% if r.ip_country and r.ip_country != r.country %} (abweichend){% endif %}</td>
+    <td data-label="Start (UTC)"><time datetime="{{ r.started }}">{{ r.started[:16] | replace("T", " ") }}</time></td>
+    <td data-label="Status">{{ r.status }}{% if r.error %}: {{ r.error }}{% endif %}</td>
+    <td data-label="Klasse angezeigt">{{ "ja" if r.cabin_shown else "nein" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h2>Alle Preise, vom höchsten zum niedrigsten</h2>
+<table>
+  <caption class="sr-only">Alle gemessenen Preise, absteigend nach Euro</caption>
+  <thead><tr><th scope="col">EUR</th><th scope="col">Preis</th><th scope="col">Land</th><th scope="col">Schritt</th><th scope="col">Flug / Anbieter</th></tr></thead>
+  <tbody>
+  {% for p in prices %}
+  <tr>
+    <td data-label="EUR">{{ p.eur or "–" }}</td>
+    <td data-label="Preis">{{ p.amount }} {{ p.currency }}</td>
+    <td data-label="Land">{{ p.country }}</td>
+    <td data-label="Schritt">{{ p.step }}</td>
+    <td data-label="Flug / Anbieter">{{ p.label }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,8 @@
+{"site": "google-flights", "country": "US", "currency": "USD", "started": "2026-10-21T08:00:01+00:00",
+ "query": {"origin": "FRA", "destination": "ATL", "depart": "2027-03-26", "back": "2027-04-09", "cabin": "business",
+           "adults": 1, "key": "FRA-ATL 2027-03-26/2027-04-09 business 1 Erw."},
+ "user_agent": "Test BookingResearch/0.1", "ip_country": "US", "status": "ok", "error": "", "cabin_shown": true,
+ "steps": [{"name": "Hinflug", "url": "https://example.org/1", "screenshot": "1-Hinflug.png",
+            "rows": [{"label": "Testair · 10:15 AM", "amount": "4340", "currency": "USD"}]},
+           {"name": "Buchungsoptionen", "url": "https://example.org/3", "screenshot": "3-Buchungsoptionen.png",
+            "rows": [{"label": "Book with Testair", "amount": "4231.50", "currency": "USD"}]}]}

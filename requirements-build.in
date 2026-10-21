@@ -1,0 +1,2 @@
+# The build backend, locked with the runtime dependencies (pip install --no-build-isolation).
+setuptools>=75
