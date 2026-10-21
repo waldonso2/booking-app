@@ -124,6 +124,8 @@ class GoogleFlights:
         _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
         rows = _snapshot(page, result, out, "Rückflug", rows, FLIGHT)
         _click(page, _pick(rows, f"{q.destination}–{q.origin}"))
+        # Return flights carry seller-like prices too: only the booking page has the booking options.
+        page.wait_for_url(re.compile(r"/booking"), timeout=WAIT_MS)
         _snapshot(page, result, out, "Buchungsoptionen", rows, SELLER)
 
 
