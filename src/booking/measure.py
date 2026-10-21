@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 # Country → the currency its point of sale shows. Only currencies with an ECB reference rate, so every price can
 # be converted to EUR; each country needs a cloud region of its own (docs/TESTLAEUFE.md).
@@ -176,7 +177,12 @@ def _pick(texts: list[str], route: str, pick: str = "") -> int:
 def _click(page: Page, index: int) -> None:
     row = page.locator(f'[data-booking-row="{index}"]').first
     target = row.locator("a, [role=link]")  # not buttons: in a row they open details or track prices
-    (target.first if target.count() else row).click()
+    target = target.first if target.count() else row
+    try:
+        target.click(timeout=5000)
+    except PlaywrightTimeout:  # a link laid over the row can be hidden from the mouse: the keyboard reaches it
+        target.focus()
+        target.press("Enter")
     page.wait_for_timeout(2000)  # a pause like a reader's, and time for the next view
 
 
@@ -227,7 +233,7 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
             except Blocked as e:
                 result.status, result.error = "blocked", str(e)
             except Exception as e:  # recorded with a screenshot: a failed step is a result too
-                result.status, result.error = "error", f"{type(e).__name__}: {e}"[:500]
+                result.status, result.error = "error", f"{type(e).__name__}: {e}"[:1500]
                 page.screenshot(path=out / "error.png", full_page=True)
             if result.status != "ok":  # what the page said and how its rows are built, to see why
                 rows = page.evaluate(ROWS_HTML)

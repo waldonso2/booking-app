@@ -15,9 +15,11 @@ RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345")]
 SELLERS = [("Book with Testair", "2,345"), ("Book with Example Travel", "2,290.50")]
 
 
-def rows(items: list[tuple[str, ...]], href: str, currency: str, flights: bool = True) -> str:
-    """List items as Google Flights builds them: an empty link over the row, named "... Select flight"."""
+def rows(items: list[tuple[str, ...]], href: str, currency: str, flights: bool = True, mouse: bool = True) -> str:
+    """List items as Google Flights builds them: a link over the row, named "... Select flight" (without `mouse`
+    it takes no clicks, only the keyboard reaches it)."""
     link = "role='link' aria-label='From {} euros round trip total. Select flight'" if flights else ""
+    link += "" if mouse else " style='pointer-events: none'"
     return "".join(f"<li><button>Details</button><div>{' </div><div>'.join(i[:-1])}</div><div>{currency}{i[-1]}</div>"
                    f"<a {link.format(i[-1])} href='{href}&amp;row={n}'>Weiter</a></li>" for n, i in enumerate(items))
 
@@ -50,7 +52,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/return", response_class=HTMLResponse)
     def back(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€')}</ul>")
+        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€', mouse=False)}</ul>")
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
