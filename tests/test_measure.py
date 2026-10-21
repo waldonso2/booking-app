@@ -40,6 +40,7 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     assert [s.name for s in r.steps] == ["Hinflug", "Rückflug", "Buchungsoptionen"]
     assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]  # flights only, not the summary
     assert any(p.startswith("/return?") and p.endswith("row=1") for p in requests)  # the picked flight
+    assert len(r.steps[2].rows) == 2  # the sellers, not the price insight below them
     assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel · Weiter", "amount": "2290.50",
                                   "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent
@@ -119,3 +120,8 @@ def test_pick_prefers_the_route_and_the_picked_flight():
     assert measure._pick(rows, "FRA–ATL", "delta") == 2
     assert measure._pick(rows, "FRA–ATL", "Condor") == 1
     assert measure._pick(["Book with Delta $4,580"], "ATL–FRA") == 0
+
+
+def test_the_spoken_amount_wins_over_other_prices_in_the_row():
+    rows = parse_rows(["Book with Lufthansa\n$4,630\n€4,123", "no price"], "USD", ["4630 US dollars", ""])
+    assert rows == [{"label": "Book with Lufthansa · €4,123", "amount": "4630", "currency": "USD"}]

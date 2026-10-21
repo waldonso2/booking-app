@@ -83,15 +83,19 @@ class Result:
     steps: list[Step] = field(default_factory=list)
 
 
-def parse_rows(texts: list[str], currency: str) -> list[dict[str, str]]:
-    """A row's text → its price and a label (the rest of the row, one line)."""
+def parse_rows(texts: list[str], currency: str, spoken: list[str] | None = None) -> list[dict[str, str]]:
+    """A row's text → its price and a label (the rest of the row, one line). Where the row's price element names its
+    amount for screen readers ("4630 US dollars"), that amount counts: the row may show others ("€4,123")."""
     rows = []
-    for text in texts:
+    for i, text in enumerate(texts):
         m = PRICE.search(text)
-        if not m:
+        said = re.search(r"\d[\d,]*(?:\.\d+)?", spoken[i]) if spoken and spoken[i] else None
+        if not (m or said):
             continue
-        label = " · ".join(line.strip() for line in (text[:m.start()] + text[m.end():]).splitlines() if line.strip())
-        rows.append({"label": label[:200], "amount": m.group(1).replace(",", ""), "currency": currency})
+        rest = text[:m.start()] + text[m.end():] if m else text
+        label = " · ".join(line.strip() for line in rest.splitlines() if line.strip())
+        amount = (said.group() if said else m.group(1) if m else "").replace(",", "")
+        rows.append({"label": label[:200], "amount": amount, "currency": currency})
     return rows
 
 
@@ -120,22 +124,28 @@ class GoogleFlights:
         _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
         rows = _snapshot(page, result, out, "Rückflug", rows, FLIGHT)
         _click(page, _pick(rows, f"{q.destination}–{q.origin}"))
-        _snapshot(page, result, out, "Buchungsoptionen", rows)
+        _snapshot(page, result, out, "Buchungsoptionen", rows, SELLER)
 
 
-# Marks each row and returns their texts. With a selector, the rows are its matches (each read with its list item);
-# without, the largest elements holding exactly one price.
+# Marks each row and returns its text and the spoken price. With a selector, each match anchors a row: the largest
+# element around it holding no other match. Without, the rows are the largest elements holding exactly one price.
 ROWS_JS = """([source, selector]) => {
   const rx = new RegExp(source, "g");
   const one = el => ((el.innerText || "").match(rx) || []).length === 1;
-  const rows = selector ? [...document.querySelectorAll(selector)] : [...document.querySelectorAll("body *")]
+  const only = el => el.parentElement && el.parentElement !== document.body
+    && el.parentElement.querySelectorAll(selector).length === 1;
+  const grow = el => { while (only(el)) el = el.parentElement; return el; };
+  const anchors = selector ? [...document.querySelectorAll(selector)] : [];
+  const rows = selector ? anchors.map(grow) : [...document.querySelectorAll("body *")]
     .filter(el => one(el) && (el.parentElement === document.body || !one(el.parentElement)));
   document.querySelectorAll("[data-booking-row]").forEach(el => el.removeAttribute("data-booking-row"));
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
-  return rows.map(el => (el.closest("li") || el).innerText);
+  return rows.map((el, i) => ({text: el.innerText, spoken: anchors[i] ? anchors[i].getAttribute("aria-label") : ""}));
 }"""
-# A flight in Google Flights' lists: the link over its row, named "... Select flight".
+# A flight in Google Flights' lists: the link over its row, named "From 4293 US dollars ... Select flight".
 FLIGHT = '[role=link][aria-label*="Select flight"]'
+# A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
+SELLER = 'span[role=text][aria-label][data-gs]:not([data-gs=""])'
 
 
 ROWS_HTML = """(size) => [...document.querySelectorAll("[data-booking-row]")]
@@ -143,13 +153,12 @@ ROWS_HTML = """(size) => [...document.querySelectorAll("[data-booking-row]")]
     .replace(/ (jslog|jsaction|data-ved)="[^"]*"/g, "").slice(0, size)).join("\\n----\\n")"""
 
 
-def _rows(page: Page, before: list[str] | None, selector: str) -> list[str]:
+def _rows(page: Page, before: list[str] | None, selector: str) -> list[dict[str, str]]:
     """The page's priced rows, once there are some and they differ from the previous step's."""
-    texts: list[str] = []
     for _ in range(WAIT_MS // 500):
-        texts = page.evaluate(ROWS_JS, [PRICE.pattern, selector])
-        if texts and texts != before:
-            return texts
+        rows: list[dict[str, str]] = page.evaluate(ROWS_JS, [PRICE.pattern, selector])
+        if rows and [r["text"] for r in rows] != before:
+            return rows
         body = page.inner_text("body").lower()
         if any(b in body for b in BLOCKED):
             raise Blocked(body[:200])
@@ -159,13 +168,14 @@ def _rows(page: Page, before: list[str] | None, selector: str) -> list[str]:
 
 def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None,
               selector: str = "") -> list[str]:
-    texts = _rows(page, before, selector)
+    rows = _rows(page, before, selector)
+    texts = [r["text"] for r in rows]
     n = len(result.steps) + 1
     shot = f"{n}-{name}.png"
     page.screenshot(path=out / shot, full_page=True)
     (out / f"{n}-{name}.html").write_text(page.content(), encoding="utf-8")
     (out / f"{n}-{name}.rows.html").write_text(page.evaluate(ROWS_HTML, 3000), encoding="utf-8")  # what was read
-    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency)))
+    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency, [r["spoken"] for r in rows])))
     return texts
 
 

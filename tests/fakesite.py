@@ -20,7 +20,9 @@ def rows(items: list[tuple[str, ...]], href: str, currency: str, flights: bool =
     it takes no clicks, only the keyboard reaches it)."""
     link = "role='link' aria-label='From {} euros round trip total. Select flight'" if flights else ""
     link += "" if mouse else " style='pointer-events: none'"
-    return "".join(f"<li><button>Details</button><div>{' </div><div>'.join(i[:-1])}</div><div>{currency}{i[-1]}</div>"
+    said = "" if flights else " role='text' data-gs='x' aria-label='{} euros'"  # sellers' prices, as Google marks them
+    return "".join(f"<li><button>Details</button><div>{' </div><div>'.join(i[:-1])}</div>"
+                   f"<div><span{said.format(i[-1].replace(',', ''))}>{currency}{i[-1]}</span></div>"
                    f"<a {link.format(i[-1])} href='{href}&amp;row={n}'>Weiter</a></li>" for n, i in enumerate(items))
 
 
@@ -56,7 +58,8 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(SELLERS, '/pay?', '€', flights=False)}</ul>")
+        insight = "<div><span>€2,290</span> is <strong>typical</strong></div><div>€1,600</div><div>€5,300</div>"
+        return PAGE.format(f"<ul>{rows(SELLERS, '/pay?', '€', flights=False)}</ul>{insight}")
 
     @app.get("/pay", response_class=HTMLResponse)
     def pay() -> str:
