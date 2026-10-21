@@ -3,6 +3,8 @@ booking options link to /pay, which the flow must never open. Prices and airline
 
 from __future__ import annotations
 
+from html import escape
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
@@ -33,8 +35,8 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
     def search(request: Request, q: str, curr: str) -> HTMLResponse:
         if "consent" not in request.cookies:
             return HTMLResponse(PAGE.format("<form method='post' action='/consent'><button>Reject all</button></form>"))
-        return HTMLResponse(PAGE.format(f"<p>{q}</p><select><option>Business</option></select>"
-                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + curr, '€')}</ul>"))
+        return HTMLResponse(PAGE.format(f"<p>{escape(q)}</p><select><option>Business</option></select>"
+                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€')}</ul>"))
 
     @app.post("/consent")
     def consent(request: Request) -> RedirectResponse:
@@ -44,7 +46,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/return", response_class=HTMLResponse)
     def back(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + curr, '€')}</ul>")
+        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€')}</ul>")
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
