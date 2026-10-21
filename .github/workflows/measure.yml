@@ -28,8 +28,6 @@ on:
       pick:
         description: Text des Hinflugs, der in jedem Land weiterverfolgt wird (leer = erster der Strecke)
         default: "10:30 AM"
-  push:
-    branches: [ccr-db7c1d22-itd9x5]  # shortcut: runs on the work branch while the study flow is checked, remove after
 
 permissions:
   contents: read
@@ -56,13 +54,13 @@ jobs:
       - name: measure
         env:
           COUNTRY: ${{ matrix.country }}
-          CONTACT: ${{ inputs.contact || 'www.contact.com' }}
-          FROM: ${{ inputs.from || 'FRA' }}
-          TO: ${{ inputs.to || 'ATL' }}
-          DEPART: ${{ inputs.depart || '2027-03-26' }}
-          RETURN: ${{ inputs.return || '2027-04-09' }}
-          CABIN: ${{ inputs.cabin || 'business' }}
-          PICK: ${{ github.event_name == 'push' && '10:30 AM' || inputs.pick }}
+          CONTACT: ${{ inputs.contact }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          DEPART: ${{ inputs.depart }}
+          RETURN: ${{ inputs.return }}
+          CABIN: ${{ inputs.cabin }}
+          PICK: ${{ inputs.pick }}
         # A country without a result is a result too: the job stays green and "report" lists it.
         run: |
           booking-app measure --country "$COUNTRY" --from "$FROM" --to "$TO" --depart "$DEPART" --return "$RETURN" \
