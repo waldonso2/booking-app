@@ -145,8 +145,10 @@ ROWS_JS = """([source, selector]) => {
   const anchors = selector ? [...document.querySelectorAll(selector)] : [];
   const rows = selector ? anchors.map(grow) : [...document.querySelectorAll("body *")]
     .filter(el => one(el) && (el.parentElement === document.body || !one(el.parentElement)));
-  document.querySelectorAll("[data-booking-row]").forEach(el => el.removeAttribute("data-booking-row"));
+  for (const name of ["data-booking-row", "data-booking-anchor"])
+    document.querySelectorAll(`[${name}]`).forEach(el => el.removeAttribute(name));
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
+  anchors.forEach((el, i) => el.setAttribute("data-booking-anchor", String(i)));
   return rows.map((el, i) => ({text: el.innerText, spoken: anchors[i] ? anchors[i].getAttribute("aria-label") : ""}));
 }"""
 BOOKING = re.compile(r"/booking")
@@ -196,7 +198,8 @@ def _pick(texts: list[str], route: str, pick: str = "") -> int:
 
 def _click(page: Page, index: int, keyboard: bool = False) -> None:
     row = page.locator(f'[data-booking-row="{index}"]').first
-    target = row.locator("a, [role=link]")  # not buttons: in a row they open details or track prices
+    anchor = page.locator(f'[data-booking-anchor="{index}"]')  # the flight's own link, when a selector found it
+    target = anchor if anchor.count() else row.locator("a, [role=link]")  # not buttons: they open details
     target = target.first if target.count() else row
     try:
         if keyboard:

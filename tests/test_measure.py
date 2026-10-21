@@ -44,7 +44,7 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel · Weiter", "amount": "2290.50",
                                   "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent
-    assert not any(p.startswith("/pay") for p in requests) and "/consent" in requests
+    assert not any(p.startswith(("/pay", "/help")) for p in requests) and "/consent" in requests
     saved = json.loads((tmp_path / "result.json").read_text())
     assert saved["query"]["key"] == Q.key and (tmp_path / saved["steps"][0]["screenshot"]).exists()
 

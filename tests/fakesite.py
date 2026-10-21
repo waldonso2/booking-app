@@ -11,7 +11,8 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 PAGE = "<!doctype html><html lang='en'><body><main>{}</main></body></html>"
 OUTBOUND = [("Testair", "10:15 AM – 2:50 PM", "FRA–ATL", "Nonstop", "2,345"),
             ("Mockline", "1:05 PM – 9:30 PM", "FRA–ATL", "1 stop", "1 hr 35 min YYZ", "1,999")]
-RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345")]
+RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345"),
+          ("Mockline", "9:00 PM – 1:10 PM+1", "ATL–FRA", "2,500")]
 SELLERS = [("Book with Testair", "2,345"), ("Book with Example Travel", "2,290.50")]
 
 
@@ -55,7 +56,10 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/return", response_class=HTMLResponse)
     def back(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€', 'ignored')}</ul>")
+        # The top flight sits alone in a section with a link of its own before it, as on Google.
+        top, other = (rows([r], '/booking?curr=' + escape(curr), '€', 'ignored') for r in RETURN)
+        return PAGE.format(f"<section><h2>Top returning flights</h2><a href='/help'>Learn more</a><ul>{top}</ul>"
+                           f"</section><h2>Other returning flights</h2><ul>{other}</ul>")
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
