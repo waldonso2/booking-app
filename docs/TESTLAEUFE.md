@@ -57,6 +57,29 @@ booking-app serve     # Ergebnis: http://127.0.0.1:8000 – je Verbindung alle P
 `--pick` sorgt dafür, dass in jedem Land derselbe Hinflug weiterverfolgt wird; ohne ihn nimmt jedes Land seinen
 ersten Treffer, und die Buchungsoptionen gehören dann zu verschiedenen Flügen.
 
+## Studie: 40 Länder (GitHub)
+
+*Actions → Messung (40 Länder) → Run workflow* misst eine Verbindung für 40 Points of Sale gleichzeitig (je Land
+ein Job, max. 20 parallel). Je Job werden Google Flights' Einstellung „Location“ (`gl`) und die Landeswährung
+gesetzt; der Job `report` importiert alle Läufe (EUR über EZB-Kurs) und schreibt alle Preise der Buchungsoptionen,
+vom höchsten zum niedrigsten, und den günstigsten Preis je Land auf die Zusammenfassungsseite.
+
+**Grenze:** Die Runner stehen in den USA. Gemessen wird, was Google für das eingestellte Land anzeigt, nicht was
+jemand aus dem Netz dieses Landes sähe – dafür braucht es VMs im Land (`scripts/run-all.sh`).
+
+### Ergebnis 21.10.2026, FRA–ATL, Business, 26.03.–09.04.2027 (Hinflug 10:30 Uhr, Lufthansa nonstop)
+
+- 40 von 40 Ländern mit Ergebnis, 239 Preise in den Buchungsoptionen (je Land 5–7 Anbieter).
+- Höchster Preis: 4.184,04 EUR (Mexiko, Gotogate, 86.874 MXN); niedrigster: 4.014,90 EUR (Polen,
+  business-class.com, 17.519 PLN).
+- Günstigster Anbieter in **jedem** Land: business-class.com. Dessen Preis je Land liegt zwischen 4.014,90 EUR (PL)
+  und 4.061,46 EUR (MX), Spanne 46,56 EUR (1,2 %); ohne Mexiko 15,45 EUR (0,4 %).
+- Alle 12 Euro-Länder zeigen exakt denselben Preis (4.022 EUR). Die Abweichungen der übrigen Länder liegen in der
+  Größenordnung der Wechselkursdifferenz zwischen Googles Umrechnung und dem EZB-Kurs.
+- **Befund:** Über Googles Ländereinstellung zeigt sich für diese Verbindung keine nennenswerte Preisdifferenzierung
+  je Point of Sale; Google rechnet offenbar einen Preis in die Landeswährung um. Mexiko (+1 %) ist der einzige
+  Ausreißer. Ob sich das mit Zugriff aus dem jeweiligen Land ändert, prüft erst die Messung über VMs.
+
 ## Testlauf aus den USA (GitHub)
 
 Ohne eigene VMs läuft eine Messung aus den USA auf einem GitHub-Runner: *Actions → Messung (USA) → Run workflow*

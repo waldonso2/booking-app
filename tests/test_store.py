@@ -68,3 +68,17 @@ def test_cli_import(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(store, "ecb_rates", lambda: RATES)
     assert cli.main(["import", str(FIXTURES)]) == 0
     assert "2 Läufe importiert" in capsys.readouterr().out
+
+
+def test_report_lists_the_booking_options_highest_first_and_the_cheapest_per_country(tmp_path, capsys):
+    db = store.connect(seeded(tmp_path / "m.db"))
+    text = store.report(db)
+    assert "| 1 | 3900.00 | 4231.50 USD | US | Book with Testair |" in text
+    assert "| US | 3900.00 | 4231.50 USD | Book with Testair |" in text
+    assert "ohne Ergebnis: JP (blocked)" in text
+
+
+def test_cli_report(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("BOOKING_DB", str(seeded(tmp_path / "m.db")))
+    assert cli.main(["report"]) == 0
+    assert "Günstigster Preis je Land" in capsys.readouterr().out
