@@ -15,11 +15,12 @@ RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345")]
 SELLERS = [("Book with Testair", "2,345"), ("Book with Example Travel", "2,290.50")]
 
 
-def rows(items: list[tuple[str, ...]], href: str, currency: str, flights: bool = True, mouse: bool = True) -> str:
-    """List items as Google Flights builds them: a link over the row, named "... Select flight" (without `mouse`
-    it takes no clicks, only the keyboard reaches it)."""
+def rows(items: list[tuple[str, ...]], href: str, currency: str, mouse: str = "", flights: bool = True) -> str:
+    """List items as Google Flights builds them: a link over the row, named "... Select flight". `mouse`: "hidden"
+    takes no clicks at all, "ignored" takes them but does nothing; the keyboard reaches both."""
     link = "role='link' aria-label='From {} euros round trip total. Select flight'" if flights else ""
-    link += "" if mouse else " style='pointer-events: none'"
+    keys = " onclick='event.preventDefault()' onkeydown='if (event.key === \"Enter\") location = this.href'"
+    link += {"": "", "hidden": " style='pointer-events: none'", "ignored": keys}[mouse]
     said = "" if flights else " role='text' data-gs='x' aria-label='{} euros'"  # sellers' prices, as Google marks them
     return "".join(f"<li><button>Details</button><div>{' </div><div>'.join(i[:-1])}</div>"
                    f"<div><span{said.format(i[-1].replace(',', ''))}>{currency}{i[-1]}</span></div>"
@@ -44,7 +45,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
             return HTMLResponse(PAGE.format("<form method='post' action='/consent'><button>Reject all</button></form>"))
         return HTMLResponse(PAGE.format(f"<p>{escape(q)}</p><select><option>Business</option></select>"
                                         "<p>Cheapest</p><p>from €1,999</p>"
-                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€')}</ul>"))
+                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€', 'hidden')}</ul>"))
 
     @app.post("/consent")
     def consent(request: Request) -> RedirectResponse:
@@ -54,7 +55,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/return", response_class=HTMLResponse)
     def back(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€', mouse=False)}</ul>")
+        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€', 'ignored')}</ul>")
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:

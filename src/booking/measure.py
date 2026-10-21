@@ -123,9 +123,14 @@ class GoogleFlights:
         rows = _snapshot(page, result, out, "Hinflug", selector=FLIGHT)
         _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
         rows = _snapshot(page, result, out, "Rückflug", rows, FLIGHT)
-        _click(page, _pick(rows, f"{q.destination}–{q.origin}"))
+        back = _pick(rows, f"{q.destination}–{q.origin}")
+        _click(page, back)
         # Return flights carry seller-like prices too: only the booking page has the booking options.
-        page.wait_for_url(re.compile(r"/booking"), timeout=WAIT_MS)
+        try:
+            page.wait_for_url(BOOKING, timeout=10_000)
+        except PlaywrightTimeout:  # a click the page didn't take: once more from the keyboard
+            _click(page, back, keyboard=True)
+            page.wait_for_url(BOOKING, timeout=WAIT_MS)
         _snapshot(page, result, out, "Buchungsoptionen", rows, SELLER)
 
 
@@ -144,6 +149,7 @@ ROWS_JS = """([source, selector]) => {
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
   return rows.map((el, i) => ({text: el.innerText, spoken: anchors[i] ? anchors[i].getAttribute("aria-label") : ""}));
 }"""
+BOOKING = re.compile(r"/booking")
 # A flight in Google Flights' lists: the link over its row, named "From 4293 US dollars ... Select flight".
 FLIGHT = '[role=link][aria-label*="Select flight"]'
 # A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
@@ -188,11 +194,13 @@ def _pick(texts: list[str], route: str, pick: str = "") -> int:
     return next((i for i in flights if pick.lower() in texts[i].lower()), flights[0] if flights else 0)
 
 
-def _click(page: Page, index: int) -> None:
+def _click(page: Page, index: int, keyboard: bool = False) -> None:
     row = page.locator(f'[data-booking-row="{index}"]').first
     target = row.locator("a, [role=link]")  # not buttons: in a row they open details or track prices
     target = target.first if target.count() else row
     try:
+        if keyboard:
+            raise PlaywrightTimeout("keyboard")
         target.click(timeout=5000)
     except PlaywrightTimeout:  # a link laid over the row can be hidden from the mouse: the keyboard reaches it
         if row.count():  # unless the click went through after all and the page moved on
