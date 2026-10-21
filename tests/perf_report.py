@@ -70,8 +70,8 @@ def test_web_vitals(site, browser):
     record("Web-UI", "Übertragen, größte Seite", worst["bytes"] / 1024, "KiB", 500, "Seitengewicht")
 
 
-def test_server_response():
-    client = TestClient(create_app())
+def test_server_response(tmp_path):
+    client = TestClient(create_app(tmp_path / "m.db"))
     times = []
     for _ in range(50):
         began = time.perf_counter()

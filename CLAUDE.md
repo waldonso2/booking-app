@@ -1,6 +1,10 @@
 # Booking App
 
-PLACEHOLDER: what it does. FastAPI + Jinja2 web app (`src/booking/`), built from `waldonso2/template-python-web`
+Research tool of the University of Stuttgart: measures whether the same flight is priced differently per country
+(point of sale), every step up to the last price before booking - nothing is booked. `measure.py` (Playwright flow
+per site, run on a cloud VM in each country, `scripts/run-all.sh`), `store.py` (import into SQLite, EUR via ECB
+rates), `main.py` (results: all prices highest first), `cli.py`. Plan and rules: `docs/PROJEKTPLAN.md`.
+FastAPI + Jinja2 web app (`src/booking/`), built from `waldonso2/template-python-web`
 (quality-kit). Docs and UI texts German, CLAUDE.md, code and comments English.
 
 ## Commands
@@ -13,6 +17,14 @@ ruff check src tests && mypy src && pytest -q --cov=booking   # what CI blocks o
 pytest tests/perf_report.py -q                           # performance report, never blocking
 scripts/lock.sh                                          # after changing a dependency (needs uv)
 ```
+
+## Measurement rules (keep them)
+
+- A flow stops before any step that books, reserves or holds seats, and always before payment.
+- No circumvention of bot detection or CAPTCHAs; a block is recorded as a result. `robots.txt` is honoured.
+- The user agent names the study and a contact; everything but the country (and its currency) stays the same.
+- Forms only ever get fabricated test persons; never real customer or payment data.
+- Tests run against fabricated sites (`tests/fakesite.py`), never real ones.
 
 ## Quality rules (quality-kit - keep them)
 

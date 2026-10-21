@@ -9,17 +9,17 @@ from booking.main import CSP, create_app
 TEMPLATES = Path(__file__).parents[1] / "src" / "booking" / "templates"
 
 
-def test_index_page_and_security_headers():
-    r = TestClient(create_app()).get("/")
+def test_index_page_and_security_headers(tmp_path):
+    r = TestClient(create_app(tmp_path / "m.db")).get("/")
     assert r.status_code == 200
-    assert "<h1>Start</h1>" in r.text
+    assert "<h1>Messungen</h1>" in r.text
     assert r.headers["content-security-policy"] == CSP
     assert "unsafe-inline" not in CSP
     assert r.headers["x-content-type-options"] == "nosniff"
 
 
-def test_no_api_docs_exposed():
-    client = TestClient(create_app())
+def test_no_api_docs_exposed(tmp_path):
+    client = TestClient(create_app(tmp_path / "m.db"))
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404
 

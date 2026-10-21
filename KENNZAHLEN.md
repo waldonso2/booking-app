@@ -44,7 +44,6 @@ Gemessen in `tests/perf_report.py` auf dem CI-Runner; entscheidend ist die Entwi
 | CLS, schlechteste Seite | ≤ 0,1 | Core Web Vitals | Bericht |
 | Übertragene Daten, größte Seite | ≤ 500 KiB | Seitengewicht | Bericht |
 | Antwortzeit des Servers, Median | ≤ 100 ms | Nielsen 0,1 s | Bericht |
-| PLATZHALTER: die Kernoperation des Projekts | … | … | Bericht |
 
 ## Wartbarkeit
 

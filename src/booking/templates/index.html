@@ -1,11 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>{{ title }}</h1>
-<p>PLACEHOLDER: the first page. Every new page goes into <code>PAGES</code> in <code>tests/conftest.py</code>, so the
-browser test checks it.</p>
+{% if queries %}
 <table>
-  <caption class="sr-only">Beispieltabelle</caption>
-  <thead><tr><th scope="col">Name</th><th scope="col">Wert</th></tr></thead>
-  <tbody><tr><td data-label="Name">Beispiel</td><td data-label="Wert">1</td></tr></tbody>
+  <caption class="sr-only">Gemessene Verbindungen</caption>
+  <thead><tr><th scope="col">Verbindung</th><th scope="col">Läufe</th><th scope="col">Niedrigster Preis</th><th scope="col">Höchster Preis</th></tr></thead>
+  <tbody>
+  {% for q in queries %}
+  <tr>
+    <td data-label="Verbindung"><a href="/messung?q={{ q.query | urlencode }}">{{ q.query }}</a></td>
+    <td data-label="Läufe">{{ q.runs }}</td>
+    <td data-label="Niedrigster Preis">{{ "%.2f €" | format(q.low) if q.low is not none else "–" }}</td>
+    <td data-label="Höchster Preis">{{ "%.2f €" | format(q.high) if q.high is not none else "–" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
 </table>
+{% else %}
+<p>Noch keine Messungen. Läufe importieren mit <code>booking-app import data/runs</code>.</p>
+{% endif %}
 {% endblock %}

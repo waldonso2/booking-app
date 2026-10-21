@@ -7,25 +7,39 @@ import socket
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
 
 import pytest
 import uvicorn
 
+from booking import store
 from booking.main import create_app
 
+FIXTURES = Path(__file__).parent / "fixtures"
+QUERY = "FRA-ATL 2027-03-26/2027-04-09 business 1 Erw."
+RATES = {"EUR": Decimal(1), "USD": Decimal("1.0850"), "JPY": Decimal("163.20")}
 # Every page a user reaches: the browser test (axe, CSP, phone width) and the performance report open each one.
-PAGES = ["/"]
+PAGES = ["/", "/messung?q=FRA-ATL%202027-03-26%2F2027-04-09%20business%201%20Erw."]
 PHONE = {"width": 375, "height": 740}
 DESKTOP = {"width": 1280, "height": 900}
 
 
-@pytest.fixture(scope="session")
-def site() -> Iterator[str]:
-    """The app served on a free local port (a real server: the browser needs one)."""
+def seeded(path: Path) -> Path:
+    """A database with the fabricated runs of tests/fixtures imported."""
+    store.import_runs(store.connect(path), FIXTURES, RATES)
+    return path
+
+
+@contextmanager
+def serve(app: Any) -> Iterator[str]:
+    """An ASGI app on a free local port (a real server: the browser needs one)."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_config=None))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     for _ in range(100):
@@ -35,6 +49,13 @@ def site() -> Iterator[str]:
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True
     thread.join(5)
+
+
+@pytest.fixture(scope="session")
+def site(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """The app with the fabricated runs."""
+    with serve(create_app(seeded(tmp_path_factory.mktemp("db") / "m.db"))) as url:
+        yield url
 
 
 @pytest.fixture(scope="session")

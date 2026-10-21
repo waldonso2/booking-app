@@ -5,17 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "booking-app"
 version = "0.1.0"
-description = "PLACEHOLDER"
+description = "Research tool: measures flight prices per point of sale (country), step by step up to booking"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
   "fastapi>=0.115",
   "jinja2>=3.1",
+  "playwright>=1.48",
   "uvicorn>=0.30",
 ]
 
 [project.scripts]
-booking-app = "booking.main:run"
+booking-app = "booking.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -26,6 +27,9 @@ booking = ["templates/*.html", "static/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.coverage.run]
+concurrency = ["thread", "greenlet"]  # playwright's sync API runs on greenlets
 
 [tool.coverage.report]
 fail_under = 90

@@ -18,7 +18,7 @@ Bedienung auf Deutsch oder Englisch, unabhängig von der Sprache des POS; Optik 
 - **Testpersonen statt echter Daten:** Formulare werden mit erfundenen, als solche erkennbaren Daten gefüllt, die
   keiner echten Person gehören; nie mit echten Kundendaten, nie mit Zahlungsdaten.
 - **Nur das Land ändert sich:** Je Messung sind Zeitpunkt (gleichzeitig ±1 min), Verbindung, Personen und Browser
-  gleich; variiert werden Ausgangsstandort, Sprache und Währung des Landes. Kontrolle: dieselbe Abfrage zweimal aus
+  gleich, auch die Sprache (Englisch); variiert werden Ausgangsstandort, Markt und Währung des Landes. Kontrolle: dieselbe Abfrage zweimal aus
   demselben Land (Rauschen durch schwankende Preise, vgl. Vissers et al.).
 - **Transparent und schonend:** Abfragen mit niedriger Rate, `robots.txt` beachten, eine Kennung der
   Forschungsgruppe mit Kontaktadresse, wo das geht. Keine Umgehung von Bot-Erkennung oder CAPTCHAs; wird ein Lauf
@@ -41,11 +41,13 @@ Bedienung auf Deutsch oder Englisch, unabhängig von der Sprache des POS; Optik 
 
 ## Phase 1 – Messwerkzeug
 
-- [ ] Playwright-Ablauf je Seite (Suche → Ergebnis → Tarifwahl → Passagierdaten → Preisübersicht → Halt)
-- [ ] Dasselbe Messwerkzeug auf jeder VM; ein zentraler Auftrag startet alle gleichzeitig und sammelt die Schritte
+- [x] Playwright-Ablauf für Google Flights (Suche → Hinflug → Rückflug → Buchungsoptionen → Halt), Testläufe:
+      [TESTLAEUFE.md](TESTLAEUFE.md)
+- [ ] Abläufe für Airline-Seiten (mit Passagierdaten der Testpersonen bis zur Preisübersicht)
+- [x] Dasselbe Messwerkzeug auf jeder VM (`scripts/run-all.sh`); ein zentraler Auftrag startet alle gleichzeitig und sammelt die Schritte
       ein (Datenbank + Bildschirmfotos)
-- [ ] Umrechnung in EUR mit dem Tageskurs zum Messzeitpunkt (Quelle: EZB-Referenzkurse)
-- [ ] Tests mit nachgebauten Seiten (keine echten Seiten in der CI)
+- [x] Umrechnung in EUR mit dem Tageskurs zum Messzeitpunkt (Quelle: EZB-Referenzkurse)
+- [x] Tests mit nachgebauten Seiten (keine echten Seiten in der CI)
 
 ## Phase 2 – Oberfläche
 

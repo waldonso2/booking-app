@@ -1,0 +1,8 @@
+{"site": "google-flights", "country": "JP", "currency": "JPY", "started": "2026-10-21T08:00:03+00:00",
+ "query": {"origin": "FRA", "destination": "ATL", "depart": "2027-03-26", "back": "2027-04-09", "cabin": "business",
+           "adults": 1, "key": "FRA-ATL 2027-03-26/2027-04-09 business 1 Erw."},
+ "user_agent": "Test BookingResearch/0.1", "ip_country": "SG", "status": "blocked",
+ "error": "unusual traffic", "cabin_shown": false,
+ "steps": [{"name": "Hinflug", "url": "https://example.org/1", "screenshot": "1-Hinflug.png",
+            "rows": [{"label": "Testair · 10:15 AM", "amount": "571200", "currency": "JPY"},
+                     {"label": "Mockline", "amount": "900", "currency": "XXX"}]}]}

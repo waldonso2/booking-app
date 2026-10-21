@@ -5,3 +5,6 @@ build/
 dist/
 .coverage
 perf-report.md
+data/
+runs/
+hosts.txt

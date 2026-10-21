@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+from . import store
 
 HERE = Path(__file__).parent
 
@@ -24,8 +27,12 @@ HEADERS = {
 }
 
 
-def create_app() -> FastAPI:
+DB = Path(os.environ.get("BOOKING_DB", "data/messungen.db"))
+
+
+def create_app(db_path: Path = DB) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    db = store.connect(db_path)
     templates = Jinja2Templates(directory=HERE / "templates")  # autoescape is on for .html
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
@@ -37,7 +44,16 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html", {"title": "Start"})
+        return templates.TemplateResponse(request, "index.html",
+                                          {"title": "Messungen", "queries": store.queries(db)})
+
+    @app.get("/messung", response_class=HTMLResponse)
+    def measurement(request: Request, q: str) -> HTMLResponse:
+        runs = store.runs(db, q)
+        if not runs:
+            raise HTTPException(404)
+        return templates.TemplateResponse(request, "measurement.html",
+                                          {"title": q, "runs": runs, "prices": store.prices(db, q)})
 
     return app
 
