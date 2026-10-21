@@ -26,7 +26,8 @@ COUNTRIES = {
 CABINS = ("economy", "premium economy", "business", "first")
 AGENT = "BookingResearch/0.1"  # the token robots.txt rules are read for
 # A price as the sites show it with language English: a currency marker, then digits with thousands commas.
-PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|[A-Z]{3}|R)\s?"
+# Only the study's currency codes count as a marker: any three capitals would take an airport ("YYZ1 stop") for one.
+PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|" + "|".join(sorted(set(COUNTRIES.values()))) + r"|R)\s?"
                    r"((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)(?![\d,:])")
 BLOCKED = ("unusual traffic", "captcha", "not a robot")
 WAIT_MS = 30_000
@@ -115,9 +116,9 @@ class GoogleFlights:
             page.wait_for_load_state()
         result.cabin_shown = q.cabin in page.inner_text("body").lower()
         rows = _snapshot(page, result, out, "Hinflug")
-        _click(page, _pick(rows, pick))
+        _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
         rows = _snapshot(page, result, out, "Rückflug", rows)
-        _click(page, 0)
+        _click(page, _pick(rows, f"{q.destination}–{q.origin}"))
         _snapshot(page, result, out, "Buchungsoptionen", rows)
 
 
@@ -131,6 +132,10 @@ ROWS_JS = """(source) => {
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
   return rows.map(el => el.innerText);
 }"""
+
+
+ROWS_HTML = """() => [...document.querySelectorAll("[data-booking-row]")].slice(0, 6)
+  .map(el => el.outerHTML.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").slice(0, 1500)).join("\\n----\\n")"""
 
 
 def _rows(page: Page, before: list[str] | None) -> list[str]:
@@ -157,15 +162,16 @@ def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str
     return texts
 
 
-def _pick(texts: list[str], pick: str) -> int:
-    """The row to continue with: the first one containing `pick` (the same flight in every country), else the
-    first."""
-    return next((i for i, t in enumerate(texts) if pick and pick.lower() in t.lower()), 0)
+def _pick(texts: list[str], route: str, pick: str = "") -> int:
+    """The row to continue with: the first flight of the route (rows name it, e.g. "FRA–ATL") containing `pick` (the
+    same flight in every country), else the route's first flight, else the first row."""
+    flights = [i for i, t in enumerate(texts) if route in t]
+    return next((i for i in flights if pick.lower() in texts[i].lower()), flights[0] if flights else 0)
 
 
 def _click(page: Page, index: int) -> None:
     row = page.locator(f'[data-booking-row="{index}"]').first
-    target = row.locator("a, button, [role=button], [role=link]")
+    target = row.locator("a, [role=link]")  # not buttons: in a row they open details or track prices
     (target.first if target.count() else row).click()
     page.wait_for_timeout(2000)  # a pause like a reader's, and time for the next view
 
@@ -219,8 +225,10 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
             except Exception as e:  # recorded with a screenshot: a failed step is a result too
                 result.status, result.error = "error", f"{type(e).__name__}: {e}"[:500]
                 page.screenshot(path=out / "error.png", full_page=True)
-            if result.status != "ok":  # what the page said, to see why without the screenshot
-                (out / "error.txt").write_text(f"{page.url}\n\n{page.inner_text('body')}", encoding="utf-8")
+            if result.status != "ok":  # what the page said and how its rows are built, to see why
+                rows = page.evaluate(ROWS_HTML)
+                (out / "error.txt").write_text(f"{page.url}\n\n{rows}\n\n{page.inner_text('body')}",
+                                               encoding="utf-8")
             browser.close()
     text = json.dumps(asdict(result), ensure_ascii=False, indent=1, default=str)
     (out / "result.json").write_text(text, encoding="utf-8")

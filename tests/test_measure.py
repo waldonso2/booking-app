@@ -38,10 +38,11 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     r = run(url, tmp_path, pick="Mockline")
     assert r.status == "ok", r.error
     assert [s.name for s in r.steps] == ["Hinflug", "Rückflug", "Buchungsoptionen"]
-    assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]
-    assert r.steps[2].rows[1] == {"label": "Book with Example Travel", "amount": "2290.50", "currency": "USD"}
+    assert [row["amount"] for row in r.steps[0].rows] == ["1999", "2345", "1999"]  # the summary line first
+    assert any(p.startswith("/return?") and p.endswith("row=1") for p in requests)  # the picked flight
+    assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel", "amount": "2290.50", "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent
-    assert "/pay" not in requests and "/consent" in requests
+    assert not any(p.startswith("/pay") for p in requests) and "/consent" in requests
     saved = json.loads((tmp_path / "result.json").read_text())
     assert saved["query"]["key"] == Q.key and (tmp_path / saved["steps"][0]["screenshot"]).exists()
 
@@ -85,8 +86,8 @@ def test_prices_as_shown_with_english(text, amount):
     assert parse_rows([text], "X")[0]["amount"] == amount
 
 
-def test_times_durations_and_flight_numbers_are_no_prices():
-    assert parse_rows(["FRA 10:15 AM\n10 hr 35 min\nLH 400\n1 stop"], "EUR") == []
+def test_times_durations_flight_numbers_and_airports_are_no_prices():
+    assert parse_rows(["FRA 10:15 AM\n10 hr 35 min\nLH 400\n1 stop in YYZ1 stop\nORD2 hr"], "EUR") == []
 
 
 def test_label_is_the_row_without_its_price():
@@ -109,3 +110,11 @@ def test_ip_country_without_network_is_empty(monkeypatch):
     monkeypatch.setattr(measure.urllib.request, "urlopen", fail)
     assert measure.ip_country() == ""
 
+
+
+def test_pick_prefers_the_route_and_the_picked_flight():
+    rows = ["from $4,293", "Lufthansa FRA–ATL $4,293", "Delta FRA–ATL $4,580"]
+    assert measure._pick(rows, "FRA–ATL") == 1
+    assert measure._pick(rows, "FRA–ATL", "delta") == 2
+    assert measure._pick(rows, "FRA–ATL", "Condor") == 1
+    assert measure._pick(["Book with Delta $4,580"], "ATL–FRA") == 0

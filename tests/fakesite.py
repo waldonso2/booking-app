@@ -9,14 +9,15 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 PAGE = "<!doctype html><html lang='en'><body><main>{}</main></body></html>"
-OUTBOUND = [("Testair", "10:15 AM – 2:50 PM", "2,345"), ("Mockline", "1:05 PM – 9:30 PM", "1,999")]
-RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "2,345")]
+OUTBOUND = [("Testair", "10:15 AM – 2:50 PM", "FRA–ATL", "Nonstop", "2,345"),
+            ("Mockline", "1:05 PM – 9:30 PM", "FRA–ATL", "1 stop", "1 hr 35 min YYZ", "1,999")]
+RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345")]
 SELLERS = [("Book with Testair", "2,345"), ("Book with Example Travel", "2,290.50")]
 
 
 def rows(items: list[tuple[str, ...]], href: str, currency: str) -> str:
-    return "".join(f"<li><a href='{href}'><div>{' </div><div>'.join(i[:-1])}</div><div>{currency}{i[-1]}</div></a>"
-                   "</li>" for i in items)
+    return "".join(f"<li><button>Details</button><a href='{href}&amp;row={n}'><div>{' </div><div>'.join(i[:-1])}"
+                   f"</div><div>{currency}{i[-1]}</div></a></li>" for n, i in enumerate(items))
 
 
 def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> FastAPI:
@@ -24,7 +25,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.middleware("http")
     async def log(request: Request, call_next):  # type: ignore[no-untyped-def]
-        requests.append(request.url.path)
+        requests.append(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return await call_next(request)
 
     @app.get("/robots.txt", response_class=PlainTextResponse)
@@ -36,6 +37,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
         if "consent" not in request.cookies:
             return HTMLResponse(PAGE.format("<form method='post' action='/consent'><button>Reject all</button></form>"))
         return HTMLResponse(PAGE.format(f"<p>{escape(q)}</p><select><option>Business</option></select>"
+                                        "<p>Cheapest</p><p>from €1,999</p>"
                                         f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€')}</ul>"))
 
     @app.post("/consent")
@@ -50,7 +52,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(SELLERS, '/pay', '€')}</ul>")
+        return PAGE.format(f"<ul>{rows(SELLERS, '/pay?', '€')}</ul>")
 
     @app.get("/pay", response_class=HTMLResponse)
     def pay() -> str:
