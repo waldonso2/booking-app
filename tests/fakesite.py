@@ -9,14 +9,23 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 PAGE = "<!doctype html><html lang='en'><body><main>{}</main></body></html>"
-OUTBOUND = [("Testair", "10:15 AM – 2:50 PM", "2,345"), ("Mockline", "1:05 PM – 9:30 PM", "1,999")]
-RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "2,345")]
+OUTBOUND = [("Testair", "10:15 AM – 2:50 PM", "FRA–ATL", "Nonstop", "2,345"),
+            ("Mockline", "1:05 PM – 9:30 PM", "FRA–ATL", "1 stop", "1 hr 35 min YYZ", "1,999")]
+RETURN = [("Testair", "5:40 PM – 8:10 AM+1", "ATL–FRA", "2,345"),
+          ("Mockline", "9:00 PM – 1:10 PM+1", "ATL–FRA", "2,500")]
 SELLERS = [("Book with Testair", "2,345"), ("Book with Example Travel", "2,290.50")]
 
 
-def rows(items: list[tuple[str, ...]], href: str, currency: str) -> str:
-    return "".join(f"<li><a href='{href}'><div>{' </div><div>'.join(i[:-1])}</div><div>{currency}{i[-1]}</div></a>"
-                   "</li>" for i in items)
+def rows(items: list[tuple[str, ...]], href: str, currency: str, mouse: str = "", flights: bool = True) -> str:
+    """List items as Google Flights builds them: a link over the row, named "... Select flight". `mouse`: "hidden"
+    takes no clicks at all, "ignored" takes them but does nothing; the keyboard reaches both."""
+    link = "role='link' aria-label='From {} euros round trip total. Select flight'" if flights else ""
+    keys = " onclick='event.preventDefault()' onkeydown='if (event.key === \"Enter\") location = this.href'"
+    link += {"": "", "hidden": " style='pointer-events: none'", "ignored": keys}[mouse]
+    said = "" if flights else " role='text' data-gs='x' aria-label='{} euros'"  # sellers' prices, as Google marks them
+    return "".join(f"<li><button>Details</button><div>{' </div><div>'.join(i[:-1])}</div>"
+                   f"<div><span{said.format(i[-1].replace(',', ''))}>{currency}{i[-1]}</span></div>"
+                   f"<a {link.format(i[-1])} href='{href}&amp;row={n}'>Weiter</a></li>" for n, i in enumerate(items))
 
 
 def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> FastAPI:
@@ -24,7 +33,7 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.middleware("http")
     async def log(request: Request, call_next):  # type: ignore[no-untyped-def]
-        requests.append(request.url.path)
+        requests.append(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return await call_next(request)
 
     @app.get("/robots.txt", response_class=PlainTextResponse)
@@ -36,7 +45,8 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
         if "consent" not in request.cookies:
             return HTMLResponse(PAGE.format("<form method='post' action='/consent'><button>Reject all</button></form>"))
         return HTMLResponse(PAGE.format(f"<p>{escape(q)}</p><select><option>Business</option></select>"
-                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€')}</ul>"))
+                                        "<p>Cheapest</p><p>from €1,999</p>"
+                                        f"<ul>{rows(OUTBOUND, '/return?curr=' + escape(curr), '€', 'hidden')}</ul>"))
 
     @app.post("/consent")
     def consent(request: Request) -> RedirectResponse:
@@ -46,11 +56,15 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
 
     @app.get("/return", response_class=HTMLResponse)
     def back(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(RETURN, '/booking?curr=' + escape(curr), '€')}</ul>")
+        # The top flight sits alone in a section with a link of its own before it, as on Google.
+        top, other = (rows([r], '/booking?curr=' + escape(curr), '€', 'ignored') for r in RETURN)
+        return PAGE.format(f"<section><h2>Top returning flights</h2><a href='/help'>Learn more</a><ul>{top}</ul>"
+                           f"</section><h2>Other returning flights</h2><ul>{other}</ul>")
 
     @app.get("/booking", response_class=HTMLResponse)
     def booking(curr: str) -> str:
-        return PAGE.format(f"<ul>{rows(SELLERS, '/pay', '€')}</ul>")
+        insight = "<div><span>€2,290</span> is <strong>typical</strong></div><div>€1,600</div><div>€5,300</div>"
+        return PAGE.format(f"<ul>{rows(SELLERS, '/pay?', '€', flights=False)}</ul>{insight}")
 
     @app.get("/pay", response_class=HTMLResponse)
     def pay() -> str:

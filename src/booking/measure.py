@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 # Country → the currency its point of sale shows. Only currencies with an ECB reference rate, so every price can
 # be converted to EUR; each country needs a cloud region of its own (docs/TESTLAEUFE.md).
@@ -26,7 +27,8 @@ COUNTRIES = {
 CABINS = ("economy", "premium economy", "business", "first")
 AGENT = "BookingResearch/0.1"  # the token robots.txt rules are read for
 # A price as the sites show it with language English: a currency marker, then digits with thousands commas.
-PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|[A-Z]{3}|R)\s?"
+# Only the study's currency codes count as a marker: any three capitals would take an airport ("YYZ1 stop") for one.
+PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|" + "|".join(sorted(set(COUNTRIES.values()))) + r"|R)\s?"
                    r"((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)(?![\d,:])")
 BLOCKED = ("unusual traffic", "captcha", "not a robot")
 WAIT_MS = 30_000
@@ -81,15 +83,19 @@ class Result:
     steps: list[Step] = field(default_factory=list)
 
 
-def parse_rows(texts: list[str], currency: str) -> list[dict[str, str]]:
-    """A row's text → its price and a label (the rest of the row, one line)."""
+def parse_rows(texts: list[str], currency: str, spoken: list[str] | None = None) -> list[dict[str, str]]:
+    """A row's text → its price and a label (the rest of the row, one line). Where the row's price element names its
+    amount for screen readers ("4630 US dollars"), that amount counts: the row may show others ("€4,123")."""
     rows = []
-    for text in texts:
+    for i, text in enumerate(texts):
         m = PRICE.search(text)
-        if not m:
+        said = re.search(r"\d[\d,]*(?:\.\d+)?", spoken[i]) if spoken and spoken[i] else None
+        if not (m or said):
             continue
-        label = " · ".join(line.strip() for line in (text[:m.start()] + text[m.end():]).splitlines() if line.strip())
-        rows.append({"label": label[:200], "amount": m.group(1).replace(",", ""), "currency": currency})
+        rest = text[:m.start()] + text[m.end():] if m else text
+        label = " · ".join(line.strip() for line in rest.splitlines() if line.strip())
+        amount = (said.group() if said else m.group(1) if m else "").replace(",", "")
+        rows.append({"label": label[:200], "amount": amount, "currency": currency})
     return rows
 
 
@@ -114,32 +120,55 @@ class GoogleFlights:
             reject.first.click()
             page.wait_for_load_state()
         result.cabin_shown = q.cabin in page.inner_text("body").lower()
-        rows = _snapshot(page, result, out, "Hinflug")
-        _click(page, _pick(rows, pick))
-        rows = _snapshot(page, result, out, "Rückflug", rows)
-        _click(page, 0)
-        _snapshot(page, result, out, "Buchungsoptionen", rows)
+        rows = _snapshot(page, result, out, "Hinflug", selector=FLIGHT)
+        _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
+        rows = _snapshot(page, result, out, "Rückflug", rows, FLIGHT)
+        back = _pick(rows, f"{q.destination}–{q.origin}")
+        _click(page, back)
+        # Return flights carry seller-like prices too: only the booking page has the booking options.
+        try:
+            page.wait_for_url(BOOKING, timeout=10_000)
+        except PlaywrightTimeout:  # a click the page didn't take: once more from the keyboard
+            _click(page, back, keyboard=True)
+            page.wait_for_url(BOOKING, timeout=WAIT_MS)
+        _snapshot(page, result, out, "Buchungsoptionen", rows, SELLER)
 
 
-# Marks each row - the largest element with exactly one price - and returns their texts.
-ROWS_JS = """(source) => {
+# Marks each row and returns its text and the spoken price. With a selector, each match anchors a row: the largest
+# element around it holding no other match. Without, the rows are the largest elements holding exactly one price.
+ROWS_JS = """([source, selector]) => {
   const rx = new RegExp(source, "g");
   const one = el => ((el.innerText || "").match(rx) || []).length === 1;
-  const rows = [...document.querySelectorAll("body *")]
+  const only = el => el.parentElement && el.parentElement !== document.body
+    && el.parentElement.querySelectorAll(selector).length === 1;
+  const grow = el => { while (only(el)) el = el.parentElement; return el; };
+  const anchors = selector ? [...document.querySelectorAll(selector)] : [];
+  const rows = selector ? anchors.map(grow) : [...document.querySelectorAll("body *")]
     .filter(el => one(el) && (el.parentElement === document.body || !one(el.parentElement)));
-  document.querySelectorAll("[data-booking-row]").forEach(el => el.removeAttribute("data-booking-row"));
+  for (const name of ["data-booking-row", "data-booking-anchor"])
+    document.querySelectorAll(`[${name}]`).forEach(el => el.removeAttribute(name));
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
-  return rows.map(el => el.innerText);
+  anchors.forEach((el, i) => el.setAttribute("data-booking-anchor", String(i)));
+  return rows.map((el, i) => ({text: el.innerText, spoken: anchors[i] ? anchors[i].getAttribute("aria-label") : ""}));
 }"""
+BOOKING = re.compile(r"/booking")
+# A flight in Google Flights' lists: the link over its row, named "From 4293 US dollars ... Select flight".
+FLIGHT = '[role=link][aria-label*="Select flight"]'
+# A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
+SELLER = 'span[role=text][aria-label][data-gs]:not([data-gs=""])'
 
 
-def _rows(page: Page, before: list[str] | None) -> list[str]:
+ROWS_HTML = """(size) => [...document.querySelectorAll("[data-booking-row]")]
+  .map(el => el.outerHTML.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>")
+    .replace(/ (jslog|jsaction|data-ved)="[^"]*"/g, "").slice(0, size)).join("\\n----\\n")"""
+
+
+def _rows(page: Page, before: list[str] | None, selector: str) -> list[dict[str, str]]:
     """The page's priced rows, once there are some and they differ from the previous step's."""
-    texts: list[str] = []
     for _ in range(WAIT_MS // 500):
-        texts = page.evaluate(ROWS_JS, PRICE.pattern)
-        if texts and texts != before:
-            return texts
+        rows: list[dict[str, str]] = page.evaluate(ROWS_JS, [PRICE.pattern, selector])
+        if rows and [r["text"] for r in rows] != before:
+            return rows
         body = page.inner_text("body").lower()
         if any(b in body for b in BLOCKED):
             raise Blocked(body[:200])
@@ -147,26 +176,39 @@ def _rows(page: Page, before: list[str] | None) -> list[str]:
     raise TimeoutError("no prices on the page")
 
 
-def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None) -> list[str]:
-    texts = _rows(page, before)
+def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None,
+              selector: str = "") -> list[str]:
+    rows = _rows(page, before, selector)
+    texts = [r["text"] for r in rows]
     n = len(result.steps) + 1
     shot = f"{n}-{name}.png"
     page.screenshot(path=out / shot, full_page=True)
     (out / f"{n}-{name}.html").write_text(page.content(), encoding="utf-8")
-    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency)))
+    (out / f"{n}-{name}.rows.html").write_text(page.evaluate(ROWS_HTML, 3000), encoding="utf-8")  # what was read
+    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency, [r["spoken"] for r in rows])))
     return texts
 
 
-def _pick(texts: list[str], pick: str) -> int:
-    """The row to continue with: the first one containing `pick` (the same flight in every country), else the
-    first."""
-    return next((i for i, t in enumerate(texts) if pick and pick.lower() in t.lower()), 0)
+def _pick(texts: list[str], route: str, pick: str = "") -> int:
+    """The row to continue with: the first flight of the route (rows name it, e.g. "FRA–ATL") containing `pick` (the
+    same flight in every country), else the route's first flight, else the first row."""
+    flights = [i for i, t in enumerate(texts) if route in t]
+    return next((i for i in flights if pick.lower() in texts[i].lower()), flights[0] if flights else 0)
 
 
-def _click(page: Page, index: int) -> None:
+def _click(page: Page, index: int, keyboard: bool = False) -> None:
     row = page.locator(f'[data-booking-row="{index}"]').first
-    target = row.locator("a, button, [role=button], [role=link]")
-    (target.first if target.count() else row).click()
+    anchor = page.locator(f'[data-booking-anchor="{index}"]')  # the flight's own link, when a selector found it
+    target = anchor if anchor.count() else row.locator("a, [role=link]")  # not buttons: they open details
+    target = target.first if target.count() else row
+    try:
+        if keyboard:
+            raise PlaywrightTimeout("keyboard")
+        target.click(timeout=5000)
+    except PlaywrightTimeout:  # a link laid over the row can be hidden from the mouse: the keyboard reaches it
+        if row.count():  # unless the click went through after all and the page moved on
+            target.focus()
+            target.press("Enter")
     page.wait_for_timeout(2000)  # a pause like a reader's, and time for the next view
 
 
@@ -217,8 +259,12 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
             except Blocked as e:
                 result.status, result.error = "blocked", str(e)
             except Exception as e:  # recorded with a screenshot: a failed step is a result too
-                result.status, result.error = "error", f"{type(e).__name__}: {e}"[:500]
+                result.status, result.error = "error", f"{type(e).__name__}: {e}"[:1500]
                 page.screenshot(path=out / "error.png", full_page=True)
+            if result.status != "ok":  # what the page said and how its rows are built, to see why
+                rows = page.evaluate(ROWS_HTML, 1500)
+                (out / "error.txt").write_text(f"{page.url}\n\n{rows}\n\n{page.inner_text('body')}",
+                                               encoding="utf-8")
             browser.close()
     text = json.dumps(asdict(result), ensure_ascii=False, indent=1, default=str)
     (out / "result.json").write_text(text, encoding="utf-8")

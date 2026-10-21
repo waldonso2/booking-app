@@ -38,10 +38,13 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     r = run(url, tmp_path, pick="Mockline")
     assert r.status == "ok", r.error
     assert [s.name for s in r.steps] == ["Hinflug", "Rückflug", "Buchungsoptionen"]
-    assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]
-    assert r.steps[2].rows[1] == {"label": "Book with Example Travel", "amount": "2290.50", "currency": "USD"}
+    assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]  # flights only, not the summary
+    assert any(p.startswith("/return?") and p.endswith("row=1") for p in requests)  # the picked flight
+    assert len(r.steps[2].rows) == 2  # the sellers, not the price insight below them
+    assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel · Weiter", "amount": "2290.50",
+                                  "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent
-    assert "/pay" not in requests and "/consent" in requests
+    assert not any(p.startswith(("/pay", "/help")) for p in requests) and "/consent" in requests
     saved = json.loads((tmp_path / "result.json").read_text())
     assert saved["query"]["key"] == Q.key and (tmp_path / saved["steps"][0]["screenshot"]).exists()
 
@@ -68,6 +71,7 @@ def test_a_page_without_prices_is_an_error_with_screenshot(fake, tmp_path, monke
     monkeypatch.setattr(measure, "WAIT_MS", 1000)
     r = run(url + "/nothing-here", tmp_path)
     assert r.status == "error" and (tmp_path / "error.png").exists()
+    assert "/nothing-here" in (tmp_path / "error.txt").read_text()
 
 
 def test_search_url_carries_country_currency_and_cabin():
@@ -84,8 +88,8 @@ def test_prices_as_shown_with_english(text, amount):
     assert parse_rows([text], "X")[0]["amount"] == amount
 
 
-def test_times_durations_and_flight_numbers_are_no_prices():
-    assert parse_rows(["FRA 10:15 AM\n10 hr 35 min\nLH 400\n1 stop"], "EUR") == []
+def test_times_durations_flight_numbers_and_airports_are_no_prices():
+    assert parse_rows(["FRA 10:15 AM\n10 hr 35 min\nLH 400\n1 stop in YYZ1 stop\nORD2 hr"], "EUR") == []
 
 
 def test_label_is_the_row_without_its_price():
@@ -108,3 +112,16 @@ def test_ip_country_without_network_is_empty(monkeypatch):
     monkeypatch.setattr(measure.urllib.request, "urlopen", fail)
     assert measure.ip_country() == ""
 
+
+
+def test_pick_prefers_the_route_and_the_picked_flight():
+    rows = ["from $4,293", "Lufthansa FRA–ATL $4,293", "Delta FRA–ATL $4,580"]
+    assert measure._pick(rows, "FRA–ATL") == 1
+    assert measure._pick(rows, "FRA–ATL", "delta") == 2
+    assert measure._pick(rows, "FRA–ATL", "Condor") == 1
+    assert measure._pick(["Book with Delta $4,580"], "ATL–FRA") == 0
+
+
+def test_the_spoken_amount_wins_over_other_prices_in_the_row():
+    rows = parse_rows(["Book with Lufthansa\n$4,630\n€4,123", "no price"], "USD", ["4630 US dollars", ""])
+    assert rows == [{"label": "Book with Lufthansa · €4,123", "amount": "4630", "currency": "USD"}]
