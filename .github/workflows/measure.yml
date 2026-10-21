@@ -50,6 +50,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat "runs/$TO/result.json"
           if [ -f "runs/$TO/error.txt" ]; then head -c 6000 "runs/$TO/error.txt"; fi
+          if [ -f "runs/$TO/3-Buchungsoptionen.rows.html" ]; then head -c 30000 "runs/$TO/3-Buchungsoptionen.rows.html"; fi
           python -c 'import json, sys; r = json.load(open(sys.argv[1])); print("\n==", r["status"], r["error"], r["cabin_shown"]); [print("==", s["name"], len(s["rows"]), s["url"][:80]) for s in r["steps"]]; [print("  ", x["amount"], x["currency"], x["label"][:90]) for x in (r["steps"] or [{"rows": []}])[-1]["rows"]]' "runs/$TO/result.json"
           exit "${status:-0}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

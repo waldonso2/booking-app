@@ -138,8 +138,9 @@ ROWS_JS = """([source, selector]) => {
 FLIGHT = '[role=link][aria-label*="Select flight"]'
 
 
-ROWS_HTML = """() => [...document.querySelectorAll("[data-booking-row]")].slice(0, 6)
-  .map(el => el.outerHTML.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").slice(0, 1500)).join("\\n----\\n")"""
+ROWS_HTML = """(size) => [...document.querySelectorAll("[data-booking-row]")]
+  .map(el => el.outerHTML.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>")
+    .replace(/ (jslog|jsaction|data-ved)="[^"]*"/g, "").slice(0, size)).join("\\n----\\n")"""
 
 
 def _rows(page: Page, before: list[str] | None, selector: str) -> list[str]:
@@ -163,6 +164,7 @@ def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str
     shot = f"{n}-{name}.png"
     page.screenshot(path=out / shot, full_page=True)
     (out / f"{n}-{name}.html").write_text(page.content(), encoding="utf-8")
+    (out / f"{n}-{name}.rows.html").write_text(page.evaluate(ROWS_HTML, 3000), encoding="utf-8")  # what was read
     result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency)))
     return texts
 
@@ -237,7 +239,7 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
                 result.status, result.error = "error", f"{type(e).__name__}: {e}"[:1500]
                 page.screenshot(path=out / "error.png", full_page=True)
             if result.status != "ok":  # what the page said and how its rows are built, to see why
-                rows = page.evaluate(ROWS_HTML)
+                rows = page.evaluate(ROWS_HTML, 1500)
                 (out / "error.txt").write_text(f"{page.url}\n\n{rows}\n\n{page.inner_text('body')}",
                                                encoding="utf-8")
             browser.close()
