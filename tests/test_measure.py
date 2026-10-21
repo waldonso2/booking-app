@@ -38,7 +38,7 @@ def test_flow_measures_every_step_and_never_opens_the_payment(fake, tmp_path):
     r = run(url, tmp_path, pick="Mockline")
     assert r.status == "ok", r.error
     assert [s.name for s in r.steps] == ["Hinflug", "Rückflug", "Buchungsoptionen"]
-    assert [row["amount"] for row in r.steps[0].rows] == ["1999", "2345", "1999"]  # the summary line first
+    assert [row["amount"] for row in r.steps[0].rows] == ["2345", "1999"]  # flights only, not the summary
     assert any(p.startswith("/return?") and p.endswith("row=1") for p in requests)  # the picked flight
     assert r.steps[2].rows[1] == {"label": "Details · Book with Example Travel", "amount": "2290.50", "currency": "USD"}
     assert r.cabin_shown and "Universitaet Stuttgart; study@example.org" in r.user_agent

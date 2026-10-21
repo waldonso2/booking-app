@@ -115,34 +115,37 @@ class GoogleFlights:
             reject.first.click()
             page.wait_for_load_state()
         result.cabin_shown = q.cabin in page.inner_text("body").lower()
-        rows = _snapshot(page, result, out, "Hinflug")
+        rows = _snapshot(page, result, out, "Hinflug", selector=FLIGHT)
         _click(page, _pick(rows, f"{q.origin}–{q.destination}", pick))
-        rows = _snapshot(page, result, out, "Rückflug", rows)
+        rows = _snapshot(page, result, out, "Rückflug", rows, FLIGHT)
         _click(page, _pick(rows, f"{q.destination}–{q.origin}"))
         _snapshot(page, result, out, "Buchungsoptionen", rows)
 
 
-# Marks each row - the largest element with exactly one price - and returns their texts.
-ROWS_JS = """(source) => {
+# Marks each row and returns their texts. With a selector, the rows are its matches (each read with its list item);
+# without, the largest elements holding exactly one price.
+ROWS_JS = """([source, selector]) => {
   const rx = new RegExp(source, "g");
   const one = el => ((el.innerText || "").match(rx) || []).length === 1;
-  const rows = [...document.querySelectorAll("body *")]
+  const rows = selector ? [...document.querySelectorAll(selector)] : [...document.querySelectorAll("body *")]
     .filter(el => one(el) && (el.parentElement === document.body || !one(el.parentElement)));
   document.querySelectorAll("[data-booking-row]").forEach(el => el.removeAttribute("data-booking-row"));
   rows.forEach((el, i) => el.setAttribute("data-booking-row", String(i)));
-  return rows.map(el => el.innerText);
+  return rows.map(el => (el.closest("li") || el).innerText);
 }"""
+# A flight in Google Flights' lists: the link over its row, named "... Select flight".
+FLIGHT = '[role=link][aria-label*="Select flight"]'
 
 
 ROWS_HTML = """() => [...document.querySelectorAll("[data-booking-row]")].slice(0, 6)
   .map(el => el.outerHTML.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").slice(0, 1500)).join("\\n----\\n")"""
 
 
-def _rows(page: Page, before: list[str] | None) -> list[str]:
+def _rows(page: Page, before: list[str] | None, selector: str) -> list[str]:
     """The page's priced rows, once there are some and they differ from the previous step's."""
     texts: list[str] = []
     for _ in range(WAIT_MS // 500):
-        texts = page.evaluate(ROWS_JS, PRICE.pattern)
+        texts = page.evaluate(ROWS_JS, [PRICE.pattern, selector])
         if texts and texts != before:
             return texts
         body = page.inner_text("body").lower()
@@ -152,8 +155,9 @@ def _rows(page: Page, before: list[str] | None) -> list[str]:
     raise TimeoutError("no prices on the page")
 
 
-def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None) -> list[str]:
-    texts = _rows(page, before)
+def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None,
+              selector: str = "") -> list[str]:
+    texts = _rows(page, before, selector)
     n = len(result.steps) + 1
     shot = f"{n}-{name}.png"
     page.screenshot(path=out / shot, full_page=True)
