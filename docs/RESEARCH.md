@@ -1,4 +1,4 @@
-# Research: günstigster Point of Sale für eine Flugverbindung
+# Research: Preise je Point of Sale für eine Flugverbindung
 
 Stand: 21.10.2026, erste Runde. Quellen am Ende; was noch nicht an der Primärquelle geprüft ist, steht als
 **offen** da.
@@ -17,7 +17,20 @@ Stand: 21.10.2026, erste Runde. Quellen am Ende; was noch nicht an der Primärqu
 **Folgerung:** Bevor wir eine App bauen, messen wir selbst (Phase 0 im Projektplan). Ohne messbare Ersparnis auf
 genug Strecken gibt es kein Produkt.
 
-## 2. Datenquellen
+## 2. Bisherige Studien
+
+- **Vissers, Nikiforakis, Bielova, Joosen (2014, „Crying Wolf?“, HotPETs):** 25 Airlines, drei Wochen; keine
+  systematische Preisdiskriminierung, Unterschiede meist durch regionale Steuern erklärbar, stark schwankende Preise
+  erschweren den Nachweis.
+- **Hannak et al. (2014, IMC):** Standardmethode für Preis-Audits mit kontrollierten Profilen und Standorten.
+- **IMC 2021** (Titel **offen**): Effekte kleiner als in Medienberichten, aber Ausreißer; häufiger und stärker
+  zwischen Länderseiten als zwischen Web und Mobil.
+- **Azzolina et al. (2021):** Profile statt Standorte, mit Amadeus als Kontrolle; kein Nachweis.
+- **Avast (2021, Anbieter):** SFO–London aus mehreren Ländern, Preise meist innerhalb von 10 USD.
+
+Unser Beitrag: alle Schritte bis vor die Zahlung statt nur der Suchergebnisseite, und viele Länder gleichzeitig.
+
+## 3. Datenquellen
 
 | Quelle | POS/Markt wählbar? | Zugang | Bewertung |
 |---|---|---|---|
@@ -32,7 +45,7 @@ genug Strecken gibt es kein Produkt.
 (GDS: Office-ID/PCC) bzw. der Markt der Airline-Website. Der saubere Weg zu „allen POS“ ist eine Quelle, die den
 Markt als Parameter nimmt, nicht eine vorgetäuschte Herkunft.
 
-## 3. Recht und Regeln
+## 4. Recht und Regeln
 
 - **EU, Art. 23 Abs. 2 VO (EG) 1008/2008** (Inhalt aus eigener Kenntnis, Wortlaut **offen**): Für Flüge ab einem
   EU-Flughafen muss der Zugang zu öffentlich angebotenen Tarifen ohne Diskriminierung nach Staatsangehörigkeit,
@@ -42,11 +55,15 @@ Markt als Parameter nimmt, nicht eine vorgetäuschte Herkunft.
   verweist auf die Branchenregeln oben. Evaluation 2025 läuft, Ergebnis **offen**.
 - **Was die Airline bindet:** Beförderungsbedingungen definieren u. a. das *Land der Zahlung* (wo die Zahlung
   angenommen wird) und das *Land des Reisebeginns*. Tarife können daran gebunden sein.
+- **§ 60d UrhG:** erlaubt Text und Data Mining für nicht kommerzielle wissenschaftliche Forschung durch
+  Forschungsorganisationen; das OLG Hamburg (5 U 104/24) hat darauf gestützt eine Klage abgewiesen, obwohl die
+  Nutzungsbedingungen automatisierte Downloads verboten. Wie weit das gegen AGB trägt, ist **offen**. Die Uni
+  Hamburg rät, `robots.txt` zu beachten und die Betreiber zu kontaktieren.
 - **Hidden City:** Lufthansa hat 2019 ihre Berufung gegen einen Passagier zurückgezogen, der die letzte Teilstrecke
   verfallen ließ (AG/LG Berlin). Kein bindender Präzedenzfall; die Airline kann weiter Folgecoupons streichen und
   Gepäck geht bis zum Endziel.
 
-### Grenze für das Produkt
+### Grenze für die Messung
 
 „Dem POS glaubhaft versichern, dass die Buchung aus dem Land erfolgt“ hat zwei Teile, die wir trennen müssen:
 
@@ -54,10 +71,10 @@ Markt als Parameter nimmt, nicht eine vorgetäuschte Herkunft.
    Proxys im Zielland ist es ein AGB-Verstoß gegenüber der jeweiligen Seite (Sperren, Unterlassung).
 2. **Buchen:** Falsche Angaben im Buchungsvorgang (Wohnsitz, Rechnungsadresse, Ausweis für Einwohnertarife) sind
    eine Täuschung des Verkäufers. Folgen: Storno, Nachforderung, Beförderungsverweigerung, im Ernstfall Betrug.
-   Das baut die App nicht. Sie bucht mit den echten Daten des Kunden und nutzt nur Hebel, die damit funktionieren.
-   Bot-Erkennung zu umgehen, gehört nicht zum Produkt.
+   Deshalb bucht die Studie nicht: Sie endet vor jeder Reservierung und Zahlung und nutzt erfundene Testpersonen
+   (Messregeln im Projektplan). Bot-Erkennung wird nicht umgangen; eine Sperre ist ein Messergebnis.
 
-## 4. Hebel, die mit echten Daten funktionieren („neue Wege“)
+## 5. Hebel, die mit echten Daten funktionieren („neue Wege“)
 
 | Hebel | Idee | Prüfen |
 |---|---|---|
@@ -71,6 +88,15 @@ Markt als Parameter nimmt, nicht eine vorgetäuschte Herkunft.
 | Einwohner-/Sondertarife | nur wenn der Kunde berechtigt ist (Profil: Wohnsitz, Alter, Studium) | Nachweise |
 
 ## Quellen
+
+- [Vissers et al. 2014: Crying Wolf? (KU Leuven)](https://lirias.kuleuven.be/retrieve/273704)
+- [Hannak et al. / Detecting price discrimination (HotNets 2012)](https://www.ccs.neu.edu/home/cbw/static/class/5750/papers/hotnets2012_pd_cr.pdf)
+- [IMC 2021](https://conferences.sigcomm.org/imc/2021/pdf/11.pdf)
+- [Azzolina et al. 2021 (JTAER)](https://www.mdpi.com/0718-1876/16/6/126)
+- [Avast 2021](https://securityboulevard.com/2021/09/internet-price-discrimination-avast/)
+- [§ 60d UrhG](https://gesetze.legal/bund/urhg/60d)
+- [OLG Hamburg 5 U 104/24 (Ferner Alsdorf)](https://www.ferner-alsdorf.de/ki-training-und-urheberrecht-zulaessigkeit-des-webscrapings-fuer-trainingsdatensaetze-olg-hh/)
+- [Uni Hamburg: Handreichung Web Scraping](https://www.wiso.uni-hamburg.de/forschung/forschungslabor/downloads/20200130-handreichung-web-scraping.pdf)
 
 - [IATA: Dynamic pricing of airline offers](https://www.iata.org/contentassets/0688c780d9ad4a4fadb461b479d64e0d/dynamic-pricing--of-airline-offers.pdf)
 - [NYIT: Professor: Don't Rely on VPN Travel Trick](https://www.nyit.edu/?p=57282)
