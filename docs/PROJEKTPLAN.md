@@ -1,4 +1,4 @@
-# Projektplan Booking App (Forschungsprojekt)
+# Projektplan Booking App (Forschungsprojekt der Universität Stuttgart)
 
 **Forschungsfrage:** Zeigen Airlines und Buchungsportale derselben Kundin für dieselbe Flugverbindung zur selben
 Zeit je nach Land (Point of Sale) andere Preise an, und wie groß sind die Unterschiede?
@@ -29,16 +29,21 @@ Bedienung auf Deutsch oder Englisch, unabhängig von der Sprache des POS; Optik 
 
 ## Phase 0 – Vorbereitung (Recht, Ethik, Quellen)
 
-- [ ] Forschungseinrichtung und Zweck festhalten (Voraussetzung für § 60d UrhG); ggf. Ethikvotum
+- [x] Forschungseinrichtung: Universität Stuttgart (Forschungsorganisation im Sinne von § 60d UrhG)
+- [ ] Zweck schriftlich festhalten; klären, ob ein Ethikvotum nötig ist
 - [ ] Rechtliche Kurzprüfung: AGB der Seiten vs. § 60d UrhG, Art. 23 Abs. 2 VO 1008/2008 im Wortlaut
 - [ ] Liste der Seiten: 5–10 Airlines, 2–3 Portale, Google Flights; je Seite die Schritte bis zum Halt beschreiben
-- [ ] Länder-Endpunkte: Anbieter für Ausgangsadressen in 20–40 Ländern auswählen (VPN oder Proxy), Kosten
+- [ ] Länderzugang über **Cloud-Server**: je Land eine kleine VM in einer Region von AWS, Google Cloud oder Azure
+      (zusammen ca. 35 Länder), nur während eines Laufs gestartet; Liste der Länder und Kosten je Messwoche.
+      Grenze: Rechenzentrums-Adressen, keine Privatanschlüsse – manche Seiten behandeln sie anders; das wird je Lauf
+      protokolliert (Sperre, CAPTCHA, abweichender Markt) und im Bericht genannt
 - [ ] Ergänzend: Quellen mit Länderparameter (SerpApi `gl`, Travelpayouts `market`) als Gegenprobe
 
 ## Phase 1 – Messwerkzeug
 
 - [ ] Playwright-Ablauf je Seite (Suche → Ergebnis → Tarifwahl → Passagierdaten → Preisübersicht → Halt)
-- [ ] Parallelstart in allen Ländern, Speicherung der Schritte (Datenbank + Bildschirmfotos)
+- [ ] Dasselbe Messwerkzeug auf jeder VM; ein zentraler Auftrag startet alle gleichzeitig und sammelt die Schritte
+      ein (Datenbank + Bildschirmfotos)
 - [ ] Umrechnung in EUR mit dem Tageskurs zum Messzeitpunkt (Quelle: EZB-Referenzkurse)
 - [ ] Tests mit nachgebauten Seiten (keine echten Seiten in der CI)
 
