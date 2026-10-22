@@ -74,7 +74,8 @@ jobs:
           booking-app measure --site "$SITE" --country "$COUNTRY" --from "$FROM" --to "$TO" --depart "$DEPART" --return "$RETURN" \
             --cabin "$CABIN" --contact "$CONTACT" --pick "$PICK" --out "runs/$COUNTRY" || true
           python -c 'import json, sys; r = json.load(open(sys.argv[1])); print("==", r["status"], r["error"][:300]); [print("==", s["name"], len(s["rows"])) for s in r["steps"]]' "runs/$COUNTRY/result.json"
-          head -c 20000 "runs/$COUNTRY/error.txt" 2>/dev/null || true
+          head -c 14000 "runs/$COUNTRY/trace.txt" 2>/dev/null || true
+          head -c 3000 "runs/$COUNTRY/error.txt" 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

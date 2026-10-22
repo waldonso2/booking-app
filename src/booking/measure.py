@@ -167,6 +167,8 @@ class Check24:
         self._airport(page, "#fl-airportOrigin1", q.origin)
         self._airport(page, "#fl-airportDestination1", q.destination)
         page.locator("#fl-day-picker-type-outbound").click()
+        page.wait_for_timeout(1500)
+        (out / "trace.txt").write_text(page.evaluate(TRACE_JS), encoding="utf-8")  # DEBUG
         for day in (q.depart, q.back):
             self._day(page, day)
         done = page.get_by_role("button", name=re.compile(r"^(Übernehmen|Fertig|OK|Bestätigen)$"))
@@ -200,6 +202,12 @@ class Check24:
             page.get_by_role("button", name=re.compile(r"nächst|next|weiter|vor", re.I)).first.click(timeout=5000)
             page.wait_for_timeout(300)
         raise TimeoutError(f"no day {day} in the calendar")
+
+
+TRACE_JS = """() => ["origin=" + document.querySelector("#fl-airportOrigin1").value,
+  "dest=" + document.querySelector("#fl-airportDestination1").value,
+  ...[...document.querySelectorAll(".fl-fixed.fl-inset-0")].map(el => (el.parentElement.outerHTML || "")
+    .replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 12000))].join("\\n\\n")"""
 
 
 SITES: dict[str, type[GoogleFlights | Check24]] = {"google-flights": GoogleFlights, "check24": Check24}
