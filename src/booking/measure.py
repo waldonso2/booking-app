@@ -164,8 +164,9 @@ class Check24:
             necessary.first.click()
         page.locator("input[name=flightType][value=rt]").check(force=True)
         page.locator("select[name=classOfService]").select_option(label=self.CLASSES[q.cabin])
-        self._airport(page, "#fl-airportOrigin1", q.origin, out)
-        self._airport(page, "#fl-airportDestination1", q.destination, out)
+        self._airport(page, "#fl-airportOrigin1", q.origin)
+        self._airport(page, "#fl-airportDestination1", q.destination)
+        _trace(page, out, "airports")
         page.locator("#fl-day-picker-type-outbound").click()
         page.wait_for_timeout(1500)
         _trace(page, out, "date picker")
@@ -179,20 +180,13 @@ class Check24:
         _snapshot(page, result, out, "Ergebnisse", price=PRICE_DE)
 
     @staticmethod
-    def _airport(page: Page, field: str, code: str, out: Path) -> None:
-        box = page.locator(field)
-        box.click()
-        page.wait_for_timeout(1000)
-        _trace(page, out, f"clicked {field}")
-        box.fill(code)
-        page.wait_for_timeout(1500)  # the suggestions
-        _trace(page, out, f"filled {field}")
-        option = page.get_by_role("option").filter(has_text=code)
-        if option.count():
-            option.first.click()
-        else:
-            box.press("ArrowDown")
-            box.press("Enter")
+    def _airport(page: Page, field: str, code: str) -> None:
+        """Types the code and picks the suggestion with exactly that code (the first one is not always it)."""
+        page.locator(field).click()
+        page.locator(field).fill(code)
+        page.locator("li[data-testid^=airport_item_]").filter(
+            has=page.locator("[data-testid=airport_iata]", has_text=re.compile(f"^{code}$"))).first.click()
+        page.wait_for_timeout(500)
 
     def _day(self, page: Page, day: date) -> None:
         names = [f'[data-date="{day.isoformat()}"]', f'[data-day="{day.isoformat()}"]',
@@ -209,9 +203,9 @@ class Check24:
 
 TRACE_JS = """(label) => {
   const a = document.activeElement;
-  const clean = h => h.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 4000);
+  const clean = h => h.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 6000);
   const layers = [...document.querySelectorAll("[class*='fl-z-'], [role=dialog], [role=listbox]")]
-    .filter(el => el.getClientRects().length && (el.innerText || "").trim()).slice(0, 6);
+    .filter(el => el.getClientRects().length && (el.innerText || "").trim().length > 30).slice(0, 4);
   return [`### ${label} url=${location.href}`, "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
     "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
     "dest=" + document.querySelector("#fl-airportDestination1")?.value,
