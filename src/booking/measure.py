@@ -178,13 +178,19 @@ class Check24:
         page.wait_for_timeout(8000)  # the offers arrive one after another
         rows = _snapshot(page, result, out, "Ergebnisse", selector=OFFER, price=PRICE_DE)
         page.locator(f'[data-booking-row="{_pick(rows, q.origin, pick)}"] [data-testid=offer_primary_button]').click()
-        rows = _snapshot(page, result, out, "Angebot", rows, "[data-testid=price_and_cta_row]", PRICE_DE)
+        page.wait_for_timeout(3000)  # the offer's price is checked again before it shows
+        _trace(page, out, "modal")
+        rows = _snapshot(page, result, out, "Angebot", rows, MODAL, PRICE_DE)
         pages, start = len(page.context.pages), page.url
         page.locator("[data-testid=go_to_booking]").click()
-        page.wait_for_timeout(8000)
+        for _ in range(60):
+            if len(page.context.pages) > pages or page.url != start:
+                break
+            page.wait_for_timeout(500)
         if len(page.context.pages) > pages:  # the booking opened in a tab of its own
             page = page.context.pages[-1]
-            page.wait_for_load_state()
+        page.wait_for_load_state()
+        page.wait_for_timeout(5000)
         _trace(page, out, f"booking (from {start})")
         _snapshot(page, result, out, "Buchung", rows, price=PRICE_DE)
 
@@ -217,10 +223,11 @@ TRACE_JS = """(label) => {
   const ids = {};
   document.querySelectorAll("[data-testid]").forEach(el => {
     const k = el.tagName.toLowerCase() + "." + el.dataset.testid; ids[k] = (ids[k] || 0) + 1; });
-  const card = [...document.querySelectorAll("[data-testid]")].find(el => /10:30/.test(el.innerText || "")
-    && /€/.test(el.innerText || "") && (el.innerText || "").length < 900);
   return [`### ${label} url=${location.href}`, Object.entries(ids).map(([k, n]) => `${k}=${n}`).join(" "),
-    "card=" + (card ? clean(card.outerHTML) : ""), "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
+    "modal=" + [...document.querySelectorAll(
+      "[data-testid=price_and_cta_row], [data-testid=pricing_delayed_message], [data-testid=footer_cta]")]
+      .map(e => e.innerText).join(" | "),
+    "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
     "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
     "dest=" + document.querySelector("#fl-airportDestination1")?.value,
     "chips=" + [...document.querySelectorAll("[data-testid=selected_airport_list]")].map(e => e.innerText).join(" | "),
@@ -258,6 +265,8 @@ BOOKING = re.compile(r"/booking")
 FLIGHT = '[role=link][aria-label*="Select flight"]'
 # An offer's price in CHECK24's result list (the filters beside it carry prices too).
 OFFER = "[data-testid=price_formatted]"
+# The opened offer: its flights and its price row, each a row of its own (the list behind it has neither).
+MODAL = "[data-testid=flight_details], [data-testid=price_and_cta_row]"
 # A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
 SELLER = 'span[role=text][aria-label][data-gs]:not([data-gs=""])'
 
