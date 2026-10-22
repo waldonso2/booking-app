@@ -32,7 +32,7 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: probe
         env:
-          URLS: ${{ inputs.urls || 'https://www.opodo.de/ https://flug.check24.de/ https://www.netflights.com/ https://www.priceline.com/ https://www.pricetravel.com/ https://www.maxmilhas.com.br/ https://www.ticket.se/ https://www.pelikan.cz/' }}
+          URLS: ${{ inputs.urls || 'https://www.opodo.de/ https://flug.check24.de/' }}
           CONTACT: ${{ inputs.contact || 'www.contact.com' }}
         run: |
           n=0
