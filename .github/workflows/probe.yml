@@ -11,8 +11,6 @@ on:
       contact:
         description: Kontakt der Forschungsgruppe (steht im User-Agent)
         required: true
-  push:
-    branches: [ccr-db7c1d22-itd9x5]  # shortcut: probes the Lufthansa pages while their flow is built, remove after
 
 permissions:
   contents: read
@@ -32,8 +30,8 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: probe
         env:
-          URLS: ${{ inputs.urls || 'https://www.opodo.de/ https://flug.check24.de/' }}
-          CONTACT: ${{ inputs.contact || 'www.contact.com' }}
+          URLS: ${{ inputs.urls }}
+          CONTACT: ${{ inputs.contact }}
         run: |
           n=0
           for url in $URLS; do

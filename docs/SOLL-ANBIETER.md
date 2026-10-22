@@ -108,6 +108,28 @@ Buchungspfade sperren.
 | **Ticket** | SE (auch NO) | lokales Reisebüro Skandinavien | keine Sperren |
 | **Pelikan** | CZ | lokales Reisebüro Tschechien | keine Sperren |
 
+### Erkundung der Auswahl (22.10.2026)
+
+Je Startseite ein Aufruf mit dem Messbrowser von einem GitHub-Runner (USA), `booking-app probe` bzw. Workflow
+„Seite erkunden“; nichts angeklickt:
+
+| Verkäufer | Ergebnis | Suchformular |
+|---|---|---|
+| Lufthansa (US, DE) | **blockt** (403, „Security check … resembles that of a bot“) | – |
+| Netflights | **blockt** (Cloudflare „Sorry, you have been blocked“) | – |
+| Priceline | **blockt** (403, „Press & Hold to confirm you are a human“) | – |
+| Check24 Flüge | erreichbar | Hin/Rück, Klasse (auch Business), Abflug, Ziel, Zeitraum, Reisende |
+| Opodo (DE) | erreichbar | Startseite mit Flugangeboten |
+| MaxMilhas | erreichbar | Herkunft, Ziel, Hin/Rück, Klasse, Reisende |
+| Ticket (SE) | erreichbar | Abflug, Ziel, Daten, „Resenärer, kabinklass“, „Sök flyg“ |
+| Pelikan | erreichbar | Abflug, Ziel, Daten, Klasse (1/2/3), „Hledej“ |
+| PriceTravel | erreichbar | Startseite zeigt die Hotelsuche, Flüge über den Reiter „Flights“ |
+
+Nach den Messregeln wird eine Sperre protokolliert, nicht umgangen. **Damit fällt die Lufthansa-Website als Quelle
+aus** – und mit ihr der Vergleich desselben Verkäufers über alle 40 Märkte. Wege dorthin ohne Umgehung: Lufthansa als
+Forschungspartner anfragen (Zugang zur Partner-Schnittstelle, developer.lufthansa.com) oder die Messung aus dem
+jeweiligen Land (VMs) – ob Lufthansa dort anders reagiert, ist offen.
+
 ### Nicht ausgewählt: robots.txt sperrt die Flugsuche
 
 fluege.de (`/search/`, `/flight/`), eDreams (`/engine/ItinerarySearch/search`), Flight Centre (`/search`),
@@ -130,7 +152,9 @@ MakeMyTrip (Zeitüberschreitung), Traveloka (405); Webjet nicht eindeutig.
 - [x] Einträge ohne Quelle geprüft (je Seite ein Abruf, 22.10.2026)
 - [ ] Für die blockenden Seiten (⛔) klären, ob eine Messung überhaupt möglich ist, oder Kontakt zum Betreiber
 - [x] Verkäufer für die direkte Messung ausgewählt (oben)
-- [ ] Testlauf lufthansa.com (ein Markt, Halt vor der Zahlung)
+- [x] Erkundung der Auswahl: Lufthansa, Netflights und Priceline blocken; Check24, Opodo, MaxMilhas, Ticket, Pelikan
+      und PriceTravel sind erreichbar
+- [ ] Lufthansa als Forschungspartner anfragen
 - [ ] Je ausgewähltem Verkäufer einen Messablauf bauen, gegen eine nachgebaute Seite testen
 - [ ] Liste als Datei für den Bericht, damit `booking-app report` „Soll gesehen / fehlt“ selbst ausweist
 
