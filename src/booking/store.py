@@ -91,11 +91,15 @@ def seller(label: str) -> str:
     return m.group(1).strip() if m else label.split(" · ")[0][:60]
 
 
-def report(db: sqlite3.Connection, step: str = "Buchungsoptionen") -> str:
+# Each site's last step: the last prices before booking (Google's sellers, CHECK24's checked offer).
+FINAL = ("Buchungsoptionen", "Angebot")
+
+
+def report(db: sqlite3.Connection, steps: tuple[str, ...] = FINAL) -> str:
     """Markdown per query: every price of the last step highest first, the cheapest per country, and failed runs."""
     out = []
     for q in queries(db):
-        rows = [p for p in prices(db, q["query"]) if p["step"] == step]
+        rows = [p for p in prices(db, q["query"]) if p["step"] in steps]
         out += [f"## {q['query']}", "", "| # | EUR | Preis | Land | Anbieter |", "|---|---|---|---|---|"]
         out += [f"| {i} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | {p['country']} | "
                 f"{seller(p['label'])} |" for i, p in enumerate(rows, 1)]

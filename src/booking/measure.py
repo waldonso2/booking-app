@@ -3,6 +3,7 @@ last price shown before booking. Nothing is booked: every flow ends on a page th
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import urllib.error
@@ -34,7 +35,7 @@ PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|" + "|"
                    r"((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)(?![\d,:])")
 # A price as German sites show it: "2.345 €", "2.290,50 €".
 PRICE_DE = re.compile(r"(?<![\d.,])((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{2})?)\s?(?:€|EUR)(?![A-Za-z])")
-BLOCKED = ("unusual traffic", "captcha", "not a robot")
+BLOCKED = ("unusual traffic", "captcha", "not a robot", "you have been blocked")
 WAIT_MS = 30_000
 
 
@@ -141,21 +142,25 @@ class GoogleFlights:
 
 
 class Check24:
-    """CHECK24 Flüge, a German point of sale: the search form as a person fills it → result list. The flow stops at
-    the list; each offer's next page asks for the traveller's data."""
+    """CHECK24 Flüge, a German point of sale: the search form as a person fills it → the result list → the picked
+    offer with its price checked once more. The flow stops there: "Zur Buchung" leads to the login and the
+    traveller's data (and Cloudflare blocked the measuring browser on that page, 22.10.2026)."""
 
     name = "check24"
     CLASSES: ClassVar[dict[str, str]] = {"economy": "Economy", "premium economy": "Premium Economy",
                                          "business": "Business", "first": "First Class"}
 
-    def __init__(self, base: str = "https://flug.check24.de") -> None:
+    def __init__(self, base: str = "https://flug.check24.de", settle_ms: int = 8000) -> None:
         self.base = base.rstrip("/")
+        self.settle_ms = settle_ms  # the offers arrive one after another
 
     def search_url(self, q: Query, country: str, currency: str) -> str:
-        return f"{self.base}/"
+        """The result page the form leads to (robots.txt is checked for it)."""
+        return (f"{self.base}/search?from_0={q.origin}-A&to_0={q.destination}-A&date_0={q.depart}"
+                f"&from_1={q.destination}-A&to_1={q.origin}-A&date_1={q.back}&adt={q.adults}")
 
     def run(self, page: Page, q: Query, result: Result, out: Path, pick: str = "") -> None:
-        page.goto(self.search_url(q, result.country, result.currency))
+        page.goto(f"{self.base}/")
         page.wait_for_timeout(2000)  # the cookie banner comes after load
         necessary = page.get_by_text(re.compile(r"^Nur notwendige Cookies$"))
         if necessary.count():  # the same choice as on Google: nothing beyond what the site needs
@@ -165,34 +170,25 @@ class Check24:
         self._airport(page, "#fl-airportOrigin1", q.origin)
         self._airport(page, "#fl-airportDestination1", q.destination)
         page.locator("#fl-day-picker-type-outbound").click()
-        page.wait_for_timeout(1500)
         for day in (q.depart, q.back):
             self._day(page, day)
-        done = page.get_by_role("button", name=re.compile(r"^(Übernehmen|Fertig|OK|Bestätigen)$"))
-        if done.count():
-            done.first.click()
-        result.cabin_shown = self.CLASSES[q.cabin] in page.inner_text("body")
-        start = page.url
         page.locator("[data-testid=search_form_primary_button]").click()
-        page.wait_for_url(lambda url: url != start, timeout=WAIT_MS)
-        page.wait_for_timeout(8000)  # the offers arrive one after another
+        page.wait_for_url(re.compile(r"/search\?"), timeout=WAIT_MS)
+        page.wait_for_timeout(self.settle_ms)
         rows = _snapshot(page, result, out, "Ergebnisse", selector=OFFER, price=PRICE_DE)
-        page.locator(f'[data-booking-row="{_pick(rows, q.origin, pick)}"] [data-testid=offer_primary_button]').click()
-        page.wait_for_timeout(3000)  # the offer's price is checked again before it shows
-        _trace(page, out, "modal")
-        rows = _snapshot(page, result, out, "Angebot", rows, MODAL, PRICE_DE)
-        pages, start = len(page.context.pages), page.url
-        page.locator("[data-testid=go_to_booking]").click()
-        for _ in range(60):
-            if len(page.context.pages) > pages or page.url != start:
-                break
-            page.wait_for_timeout(500)
-        if len(page.context.pages) > pages:  # the booking opened in a tab of its own
-            page = page.context.pages[-1]
-        page.wait_for_load_state()
-        page.wait_for_timeout(5000)
-        _trace(page, out, f"booking (from {start})")
-        _snapshot(page, result, out, "Buchung", rows, price=PRICE_DE)
+        picked = _pick(rows, q.origin, pick)
+        page.locator(f'[data-booking-row="{picked}"] [data-testid=offer_primary_button]').click()
+        page.locator("[data-testid=price_and_cta_row]").wait_for(timeout=WAIT_MS)
+        # "Einen Moment bitte, das Angebot wird geprüft…": the price may change once checked. If the message stays,
+        # it stays in the row's label.
+        with contextlib.suppress(PlaywrightTimeout):
+            page.locator("[data-testid=pricing_delayed_message]").wait_for(state="hidden", timeout=WAIT_MS)
+        classes = " ".join(page.locator("[data-testid=carrier_details_class_of_service]").all_inner_texts())
+        result.cabin_shown = self.CLASSES[q.cabin].lower() in classes.lower()
+        _snapshot(page, result, out, "Angebot", rows, MODAL, PRICE_DE)
+        flight = parse_rows([rows[picked]], result.currency, price=PRICE_DE)[0]["label"]
+        for row in result.steps[-1].rows:  # CHECK24 sells it itself; the label names the flight
+            row["label"] = f"CHECK24 · {flight} · {row['label']}"[:200]
 
     @staticmethod
     def _airport(page: Page, field: str, code: str) -> None:
@@ -213,31 +209,6 @@ class Check24:
             page.locator("[data-testid=next_month_btn]").click()
             page.wait_for_timeout(300)
         raise TimeoutError(f"no day {day} in the calendar")
-
-
-TRACE_JS = """(label) => {
-  const a = document.activeElement;
-  const clean = h => h.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 6000);
-  const layers = [...document.querySelectorAll("[class*='fl-z-'], [role=dialog], [role=listbox]")]
-    .filter(el => el.getClientRects().length && (el.innerText || "").trim().length > 30).slice(0, 4);
-  const ids = {};
-  document.querySelectorAll("[data-testid]").forEach(el => {
-    const k = el.tagName.toLowerCase() + "." + el.dataset.testid; ids[k] = (ids[k] || 0) + 1; });
-  return [`### ${label} url=${location.href}`, Object.entries(ids).map(([k, n]) => `${k}=${n}`).join(" "),
-    "modal=" + [...document.querySelectorAll(
-      "[data-testid=price_and_cta_row], [data-testid=pricing_delayed_message], [data-testid=footer_cta]")]
-      .map(e => e.innerText).join(" | "),
-    "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
-    "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
-    "dest=" + document.querySelector("#fl-airportDestination1")?.value,
-    "chips=" + [...document.querySelectorAll("[data-testid=selected_airport_list]")].map(e => e.innerText).join(" | "),
-    ...layers.map(el => clean(el.outerHTML))].join("\\n") + "\\n\\n";
-}"""
-
-
-def _trace(page: Page, out: Path, label: str) -> None:  # DEBUG
-    with (out / "trace.txt").open("a", encoding="utf-8") as f:
-        f.write(page.evaluate(TRACE_JS, label))
 
 
 SITES: dict[str, type[GoogleFlights | Check24]] = {"google-flights": GoogleFlights, "check24": Check24}

@@ -7,9 +7,9 @@ from datetime import date
 import pytest
 
 from booking import measure
-from booking.measure import GoogleFlights, Query, parse_rows
+from booking.measure import Check24, GoogleFlights, Query, parse_rows
 
-from . import fakesite
+from . import fakecheck24, fakesite
 from .conftest import serve
 
 Q = Query("FRA", "ATL", date(2027, 3, 26), date(2027, 4, 9), "business")
@@ -22,10 +22,10 @@ def fake():
         yield url, requests
 
 
-def run(site_url, tmp_path, **kw):
+def run(site_url, tmp_path, site=None, country="US", **kw):
     pytest.importorskip("playwright.sync_api")
     try:
-        return measure.measure(GoogleFlights(site_url), Q, "US", tmp_path, "study@example.org",
+        return measure.measure(site or GoogleFlights(site_url), Q, country, tmp_path, "study@example.org",
                                chromium=os.environ.get("CHROMIUM_PATH") or None, locate=False, **kw)
     except Exception as e:  # no browser installed
         if os.environ.get("CI") or "Executable doesn't exist" not in str(e):
@@ -159,3 +159,38 @@ def test_probe_sees_a_block_page(fake, tmp_path):
     pytest.importorskip("playwright.sync_api")
     assert measure.probe(url + "/blocked/travel/flights", tmp_path, "x@example.org",
                          os.environ.get("CHROMIUM_PATH") or None)["status"] == "blocked"
+
+
+def test_check24_fills_the_form_reads_the_offers_and_stops_at_the_checked_offer(tmp_path):
+    requests: list[str] = []
+    with serve(fakecheck24.create(requests)) as url:
+        r = run(url, tmp_path, site=Check24(url, settle_ms=200), country="DE", pick="Mockline")
+    assert r.status == "ok", r.error
+    assert [s.name for s in r.steps] == ["Ergebnisse", "Angebot"]
+    assert any(p.startswith("/search?from_0=FRA-A&to_0=ATL-A&date_0=2027-03-26&from_1=ATL-A&to_1=FRA-A"
+                            "&date_1=2027-04-09&adt=1&class=BF&rt=true") for p in requests)
+    assert [row["amount"] for row in r.steps[0].rows] == ["4122.79", "3277.20"]  # offers only, not the filters
+    (offer,) = r.steps[1].rows
+    assert offer["amount"] == "3277.20" and offer["label"].startswith("CHECK24 · 12:00 FRA Mockline")
+    assert r.cabin_shown and not any(p.startswith("/buchung") for p in requests)
+
+
+def test_check24_takes_the_price_once_checked(tmp_path):
+    with serve(fakecheck24.create([])) as url:
+        r = run(url, tmp_path, site=Check24(url, settle_ms=200), country="DE")
+    assert r.steps[1].rows[0]["amount"] == "4150.00"  # 4.122,79 € in the list, 4.150,00 € once checked
+
+
+def test_check24_search_url_is_the_result_page():
+    assert Check24().search_url(Q, "DE", "EUR") == (
+        "https://flug.check24.de/search?from_0=FRA-A&to_0=ATL-A&date_0=2027-03-26&from_1=ATL-A&to_1=FRA-A"
+        "&date_1=2027-04-09&adt=1")
+
+
+@pytest.mark.parametrize(("text", "amount"), [("4.122,79 €", "4122.79"), ("Ab 57 €", "57"), ("12.345 EUR", "12345")])
+def test_german_prices(text, amount):
+    assert parse_rows([text], "EUR", price=measure.PRICE_DE)[0]["amount"] == amount
+
+
+def test_german_times_and_dates_are_no_prices():
+    assert parse_rows(["10:30 FRA - 26. März · 10 Std. 10 Min. · 1 Stopp"], "EUR", price=measure.PRICE_DE) == []
