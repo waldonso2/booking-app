@@ -80,6 +80,28 @@ jemand aus dem Netz dieses Landes sähe – dafür braucht es VMs im Land (`scri
   je Point of Sale; Google rechnet offenbar einen Preis in die Landeswährung um. Mexiko (+1 %) ist der einzige
   Ausreißer. Ob sich das mit Zugriff aus dem jeweiligen Land ändert, prüft erst die Messung über VMs.
 
+## CHECK24 Flüge (DE)
+
+Derselbe Workflow mit *Seite* `check24` und *Länder* `["DE"]` misst CHECK24 Flüge, einen deutschen Point of Sale.
+Der Ablauf füllt das Suchformular wie ein Mensch aus (nur notwendige Cookies, Hin- und Rückflug, Klasse,
+Flughäfen aus den Vorschlägen, Daten im Kalender) und hält zwei Schritte fest:
+
+1. **Ergebnisse** – nur die Angebotskarten, nicht die Filterpreise daneben.
+2. **Angebot** – das gewählte Angebot (`--pick`, z. B. „Lufthansa“), nachdem CHECK24 den Preis noch einmal
+   geprüft hat („Einen Moment bitte, das Angebot wird geprüft…“). Das ist der letzte Preis vor der Buchung.
+
+Der Ablauf endet dort. „Zur Buchung“ führt zur Anmeldung und Eingabe der Reisedaten
+(`accounts.check24.de` → `buchung/dateneingabe`); auf dieser Seite hat Cloudflare den Messbrowser im Test gesperrt
+(„Sorry, you have been blocked“). Der Bericht zählt bei CHECK24 den Schritt „Angebot“, bei Google die
+Buchungsoptionen.
+
+### Ergebnis 22.10.2026, FRA–ATL, Business, 26.03.–09.04.2027 (Runner in den USA)
+
+- Ergebnisseite: `flug.check24.de/search?from_0=FRA-A&to_0=ATL-A&date_0=2027-03-26&from_1=ATL-A&to_1=FRA-A`
+  `&date_1=2027-04-09&adt=1&class=BF`, 697–893 Flüge, ab 3.277,20 EUR (mit Umstieg).
+- Lufthansa nonstop, Hinflug 10:30 Uhr: **4.122,79 EUR**, auch nach der Preisprüfung. Google zeigte für denselben
+  Flug am 21.10. Lufthansa mit 4.123 EUR und business-class.com mit 4.022 EUR.
+
 ## Testlauf aus den USA (GitHub)
 
 Ohne eigene VMs läuft eine Messung aus den USA auf einem GitHub-Runner: *Actions → Messung (USA) → Run workflow*
@@ -107,8 +129,9 @@ der Buchungsseite (Google: „Equivalent to … on …“); er steht im Label je
 
 ## Grenzen der ersten Version
 
-- Die Schritte sind auf Google Flights abgestimmt (Fluglinks „Select flight“, Anbieterpreise mit `data-gs`);
-  ändert Google das Layout, zeigen Bildschirmfoto, Seitenkopie und `*.rows.html`, wo es hakt.
+- Die Schritte sind je Seite gebaut: Google Flights (Fluglinks „Select flight“, Anbieterpreise mit `data-gs`) und
+  CHECK24 (`data-testid` der Seite); ändert eine Seite ihr Layout, zeigen Bildschirmfoto, Seitenkopie,
+  `*.rows.html` und `error.txt` (mit allen Bedienelementen), wo es hakt.
 - Der Lauf über GitHub misst nur aus den USA; der Ländervergleich braucht die VMs (oben).
 - Die Euro-Umrechnung nutzt den EZB-Referenzkurs vom Tag des Imports.
-- Nur Google Flights; Airline-Seiten mit Passagierdaten sind der nächste Schritt (Projektplan, Phase 1).
+- Google Flights und CHECK24; die weiteren ausgewählten Verkäufer folgen (docs/SOLL-ANBIETER.md).

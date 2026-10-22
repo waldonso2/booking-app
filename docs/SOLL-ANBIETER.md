@@ -155,7 +155,8 @@ MakeMyTrip (Zeitüberschreitung), Traveloka (405); Webjet nicht eindeutig.
 - [x] Erkundung der Auswahl: Lufthansa, Netflights und Priceline blocken; Check24, Opodo, MaxMilhas, Ticket, Pelikan
       und PriceTravel sind erreichbar
 - [ ] Lufthansa als Forschungspartner anfragen
-- [ ] Je ausgewähltem Verkäufer einen Messablauf bauen, gegen eine nachgebaute Seite testen
+- [x] Check24: Messablauf bis zum geprüften Angebotspreis (docs/TESTLAEUFE.md); „Zur Buchung“ sperrt Cloudflare
+- [ ] Je weiterem ausgewähltem Verkäufer einen Messablauf bauen, gegen eine nachgebaute Seite testen
 - [ ] Liste als Datei für den Bericht, damit `booking-app report` „Soll gesehen / fehlt“ selbst ausweist
 
 ## Quellen
