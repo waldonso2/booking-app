@@ -141,7 +141,8 @@ def test_probe_keeps_the_page_and_its_controls(fake, tmp_path):
     found = measure.probe(url + "/travel/flights?q=x&curr=EUR", tmp_path, "x@example.org",
                           os.environ.get("CHROMIUM_PATH") or None)
     assert found["status"] == "ok" and found["http"] == 200
-    assert {"tag": "button", "role": "", "type": "", "id": "", "name": "", "label": "Reject all"} in found["controls"]
+    assert {"tag": "button", "role": "", "type": "", "id": "", "name": "", "data": "",
+            "label": "Reject all"} in found["controls"]
     assert (tmp_path / "page.png").exists() and "Reject all" in (tmp_path / "page.txt").read_text()
     assert not any(p.startswith("/consent") for p in requests)  # nothing clicked
 

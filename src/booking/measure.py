@@ -197,7 +197,7 @@ class Check24:
             if found.count():
                 found.first.click()
                 return
-            page.get_by_role("button", name=re.compile(r"nächst|next|weiter|vor", re.I)).first.click()
+            page.get_by_role("button", name=re.compile(r"nächst|next|weiter|vor", re.I)).first.click(timeout=5000)
             page.wait_for_timeout(300)
         raise TimeoutError(f"no day {day} in the calendar")
 
@@ -354,10 +354,13 @@ def measure(site: GoogleFlights | Check24, q: Query, country: str, out: Path, co
 
 # Every control a person could use, with the name a screen reader gives it: what a new site's flow is built from.
 CONTROLS_JS = """() => [...document.querySelectorAll(
-  "input, select, textarea, button, a[href], [role=button], [role=combobox], [role=tab], [role=link]")]
-  .filter(el => el.offsetParent !== null).slice(0, 300).map(el => ({
+  "input, select, textarea, button, a[href], [role=button], [role=combobox], [role=tab], [role=link], " +
+  "[role=option], [role=gridcell], [role=dialog]")]
+  .filter(el => el.getClientRects().length).slice(0, 300).map(el => ({
     tag: el.tagName.toLowerCase(), role: el.getAttribute("role") || "", type: el.getAttribute("type") || "",
     id: el.id || "", name: el.getAttribute("name") || "",
+    data: [...el.attributes].filter(a => a.name.startsWith("data-")).slice(0, 3)
+      .map(a => `${a.name}=${a.value.slice(0, 40)}`).join(" "),
     label: (el.getAttribute("aria-label") || el.labels?.[0]?.innerText || el.innerText || el.value || "")
       .trim().slice(0, 80)}))"""
 
