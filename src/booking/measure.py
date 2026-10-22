@@ -145,8 +145,6 @@ class Check24:
     the list; each offer's next page asks for the traveller's data."""
 
     name = "check24"
-    MONTHS = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
-              "November", "Dezember")
     CLASSES: ClassVar[dict[str, str]] = {"economy": "Economy", "premium economy": "Premium Economy",
                                          "business": "Business", "first": "First Class"}
 
@@ -170,11 +168,14 @@ class Check24:
         page.locator("#fl-day-picker-type-outbound").click()
         page.wait_for_timeout(1500)
         _trace(page, out, "date picker")
+        page.locator("[data-testid=next_month_btn]").click()
+        _trace(page, out, "next month")
         for day in (q.depart, q.back):
             self._day(page, day)
         done = page.get_by_role("button", name=re.compile(r"^(Übernehmen|Fertig|OK|Bestätigen)$"))
         if done.count():
             done.first.click()
+        _trace(page, out, "days")
         result.cabin_shown = self.CLASSES[q.cabin] in page.inner_text("body")
         page.get_by_role("button", name=re.compile(r"^Suchen$")).first.click()
         _snapshot(page, result, out, "Ergebnisse", price=PRICE_DE)
@@ -188,15 +189,14 @@ class Check24:
             has=page.locator("[data-testid=airport_iata]", has_text=re.compile(f"^{code}$"))).first.click()
         page.wait_for_timeout(500)
 
-    def _day(self, page: Page, day: date) -> None:
-        names = [f'[data-date="{day.isoformat()}"]', f'[data-day="{day.isoformat()}"]',
-                 f'[aria-label*="{day.day}. {self.MONTHS[day.month - 1]} {day.year}"]']
+    @staticmethod
+    def _day(page: Page, day: date) -> None:
+        cell = page.locator(f'td[data-day="{day.isoformat()}"] button')
         for _ in range(24):  # month by month to the day
-            found = page.locator(", ".join(names))
-            if found.count():
-                found.first.click()
+            if cell.count():
+                cell.first.click()
                 return
-            page.get_by_role("button", name=re.compile(r"nächst|next|weiter|vor", re.I)).first.click(timeout=5000)
+            page.locator("[data-testid=next_month_btn]").click()
             page.wait_for_timeout(300)
         raise TimeoutError(f"no day {day} in the calendar")
 
@@ -209,6 +209,7 @@ TRACE_JS = """(label) => {
   return [`### ${label} url=${location.href}`, "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
     "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
     "dest=" + document.querySelector("#fl-airportDestination1")?.value,
+    "chips=" + [...document.querySelectorAll("[data-testid=selected_airport_list]")].map(e => e.innerText).join(" | "),
     ...layers.map(el => clean(el.outerHTML))].join("\\n") + "\\n\\n";
 }"""
 
