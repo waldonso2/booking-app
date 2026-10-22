@@ -56,8 +56,16 @@ def test_robots_txt_that_disallows_stops_before_the_browser(tmp_path):
     assert r.status == "robots" and requests == ["/robots.txt"]
 
 
+def test_robots_txt_is_fetched_under_the_studys_name_and_a_missing_one_closes_nothing():
+    with serve(fakesite.create([])) as url:
+        assert measure.allowed(url + "/travel/flights")
+    with serve(fakesite.create([], robots=None)) as url:
+        assert measure.allowed(url + "/travel/flights")
+
+
 def test_unreachable_robots_txt_allows_nothing():
     assert not measure.allowed("http://127.0.0.1:9/travel/flights")
+    assert not measure.allowed("file:///etc/passwd")
 
 
 def test_a_block_page_is_a_result(fake, tmp_path):
@@ -125,3 +133,28 @@ def test_pick_prefers_the_route_and_the_picked_flight():
 def test_the_spoken_amount_wins_over_other_prices_in_the_row():
     rows = parse_rows(["Book with Lufthansa\n$4,630\n€4,123", "no price"], "USD", ["4630 US dollars", ""])
     assert rows == [{"label": "Book with Lufthansa · €4,123", "amount": "4630", "currency": "USD"}]
+
+
+def test_probe_keeps_the_page_and_its_controls(fake, tmp_path):
+    url, requests = fake
+    pytest.importorskip("playwright.sync_api")
+    found = measure.probe(url + "/travel/flights?q=x&curr=EUR", tmp_path, "x@example.org",
+                          os.environ.get("CHROMIUM_PATH") or None)
+    assert found["status"] == "ok" and found["http"] == 200
+    assert {"tag": "button", "role": "", "type": "", "id": "", "name": "", "label": "Reject all"} in found["controls"]
+    assert (tmp_path / "page.png").exists() and "Reject all" in (tmp_path / "page.txt").read_text()
+    assert not any(p.startswith("/consent") for p in requests)  # nothing clicked
+
+
+def test_probe_stops_at_robots_txt(tmp_path):
+    requests: list[str] = []
+    with serve(fakesite.create(requests, robots="User-agent: *\nDisallow: /\n")) as url:
+        assert measure.probe(url + "/", tmp_path, "x@example.org")["status"] == "robots"
+    assert requests == ["/robots.txt"]
+
+
+def test_probe_sees_a_block_page(fake, tmp_path):
+    url, _ = fake
+    pytest.importorskip("playwright.sync_api")
+    assert measure.probe(url + "/blocked/travel/flights", tmp_path, "x@example.org",
+                         os.environ.get("CHROMIUM_PATH") or None)["status"] == "blocked"

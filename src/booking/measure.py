@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.error
 import urllib.request
 import urllib.robotparser
 from dataclasses import asdict, dataclass, field
@@ -218,11 +219,19 @@ class Blocked(Exception):
 
 
 def allowed(url: str) -> bool:
-    """Whether the site's robots.txt lets this study fetch `url` (an unreachable robots.txt allows nothing)."""
+    """Whether the site's robots.txt lets this study fetch `url`. It is fetched under the study's name (sites refuse
+    Python's default one); none at all (404) closes nothing, an unreachable one closes everything."""
     parts = urlsplit(url)
-    robots = urllib.robotparser.RobotFileParser(f"{parts.scheme}://{parts.netloc}/robots.txt")
+    if parts.scheme not in ("http", "https"):
+        return False
+    req = urllib.request.Request(f"{parts.scheme}://{parts.netloc}/robots.txt",  # noqa: S310 - http(s) only
+                                 headers={"User-Agent": f"Mozilla/5.0 {AGENT}"})
+    robots = urllib.robotparser.RobotFileParser()
     try:
-        robots.read()
+        with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 - http(s) only, checked above
+            robots.parse(r.read().decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as e:
+        return e.code == 404
     except OSError:
         return False
     return robots.can_fetch(AGENT, url)
@@ -270,3 +279,45 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
     text = json.dumps(asdict(result), ensure_ascii=False, indent=1, default=str)
     (out / "result.json").write_text(text, encoding="utf-8")
     return result
+
+
+# Every control a person could use, with the name a screen reader gives it: what a new site's flow is built from.
+CONTROLS_JS = """() => [...document.querySelectorAll(
+  "input, select, textarea, button, a[href], [role=button], [role=combobox], [role=tab], [role=link]")]
+  .filter(el => el.offsetParent !== null).slice(0, 300).map(el => ({
+    tag: el.tagName.toLowerCase(), role: el.getAttribute("role") || "", type: el.getAttribute("type") || "",
+    id: el.id || "", name: el.getAttribute("name") || "",
+    label: (el.getAttribute("aria-label") || el.labels?.[0]?.innerText || el.innerText || el.value || "")
+      .trim().slice(0, 80)}))"""
+
+
+def probe(url: str, out: Path, contact: str, chromium: str | None = None) -> dict[str, Any]:
+    """Opens one page as a measurement would and keeps what a flow for the site needs: whether robots.txt allows
+    it, whether it blocks, a screenshot, the page and its controls. Clicks nothing."""
+    out.mkdir(parents=True, exist_ok=True)
+    found: dict[str, Any] = {"url": url, "status": "ok", "error": ""}
+    if not allowed(url):
+        found.update(status="robots", error="robots.txt der Seite verbietet den Abruf")
+    else:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path=chromium)
+            ua = browser.new_page().evaluate("navigator.userAgent")
+            page = browser.new_context(user_agent=f"{ua} {AGENT} (Universitaet Stuttgart; {contact})",
+                                       locale="en-US", viewport={"width": 1280, "height": 900}).new_page()
+            try:
+                response = page.goto(url)
+                page.wait_for_timeout(3000)  # banners and forms built after load
+                body = page.inner_text("body")
+                found.update(http=response.status if response else None, final_url=page.url,
+                             title=page.title(), controls=page.evaluate(CONTROLS_JS))
+                if (response and response.status >= 400) or any(b in body.lower() for b in BLOCKED):
+                    found["status"] = "blocked"
+                (out / "page.txt").write_text(body, encoding="utf-8")
+                (out / "page.html").write_text(page.content(), encoding="utf-8")
+                page.screenshot(path=out / "page.png", full_page=True)
+            except Exception as e:  # recorded: an unreachable page is a finding too
+                found.update(status="error", error=f"{type(e).__name__}: {e}"[:500])
+            browser.close()
+    text = json.dumps(found, ensure_ascii=False, indent=1)
+    (out / "probe.json").write_text(text, encoding="utf-8")
+    return found

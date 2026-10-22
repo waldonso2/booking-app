@@ -94,3 +94,10 @@ def test_cli_report(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("BOOKING_DB", str(seeded(tmp_path / "m.db")))
     assert cli.main(["report"]) == 0
     assert "Günstigster Preis je Land" in capsys.readouterr().out
+
+
+def test_cli_probe_passes_the_url(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(measure, "probe", lambda url, out, contact, chromium: {"status": "ok", "http": 200,
+                                                                              "final_url": url, "error": ""})
+    assert cli.main(["probe", "https://example.org/", "--contact", "a@example.org", "--out", str(tmp_path)]) == 0
+    assert "ok 200 https://example.org/" in capsys.readouterr().out

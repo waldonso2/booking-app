@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--pick", default="", help="text of the outbound flight to continue with (e.g. 'Lufthansa')")
     m.add_argument("--contact", required=True, help="e-mail of the research group, sent in the user agent")
     m.add_argument("--out", required=True, type=Path)
+    pr = sub.add_parser("probe", help="open one page and keep its controls, for building a site's flow")
+    pr.add_argument("url")
+    pr.add_argument("--contact", required=True, help="e-mail of the research group, sent in the user agent")
+    pr.add_argument("--out", required=True, type=Path)
     i = sub.add_parser("import", help="import result.json files into the database")
     i.add_argument("folder", type=Path)
     sub.add_parser("report", help="all prices of the booking options as Markdown, highest first")
@@ -40,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
                             os.environ.get("CHROMIUM_PATH") or None)
         print(f"{r.country}: {r.status} {r.error}".rstrip())
         return 0 if r.status == "ok" else 1
+    if a.command == "probe":
+        found = measure.probe(a.url, a.out, a.contact, os.environ.get("CHROMIUM_PATH") or None)
+        print(f"{found['status']} {found.get('http', '')} {found.get('final_url', '')} {found['error']}".strip())
+        return 0 if found["status"] == "ok" else 1
     db = store.connect(Path(os.environ.get("BOOKING_DB", "data/messungen.db")))
     if a.command == "import":
         print(f"{store.import_runs(db, a.folder, store.ecb_rates())} Läufe importiert")
