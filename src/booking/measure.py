@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.error
 import urllib.request
 import urllib.robotparser
 from dataclasses import asdict, dataclass, field
@@ -218,11 +219,19 @@ class Blocked(Exception):
 
 
 def allowed(url: str) -> bool:
-    """Whether the site's robots.txt lets this study fetch `url` (an unreachable robots.txt allows nothing)."""
+    """Whether the site's robots.txt lets this study fetch `url`. It is fetched under the study's name (sites refuse
+    Python's default one); none at all (404) closes nothing, an unreachable one closes everything."""
     parts = urlsplit(url)
-    robots = urllib.robotparser.RobotFileParser(f"{parts.scheme}://{parts.netloc}/robots.txt")
+    if parts.scheme not in ("http", "https"):
+        return False
+    req = urllib.request.Request(f"{parts.scheme}://{parts.netloc}/robots.txt",  # noqa: S310 - http(s) only
+                                 headers={"User-Agent": f"Mozilla/5.0 {AGENT}"})
+    robots = urllib.robotparser.RobotFileParser()
     try:
-        robots.read()
+        with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 - http(s) only, checked above
+            robots.parse(r.read().decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as e:
+        return e.code == 404
     except OSError:
         return False
     return robots.can_fetch(AGENT, url)

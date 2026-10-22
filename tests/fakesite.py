@@ -28,7 +28,7 @@ def rows(items: list[tuple[str, ...]], href: str, currency: str, mouse: str = ""
                    f"<a {link.format(i[-1])} href='{href}&amp;row={n}'>Weiter</a></li>" for n, i in enumerate(items))
 
 
-def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> FastAPI:
+def create(requests: list[str], robots: str | None = "User-agent: *\nAllow: /\n") -> FastAPI:
     app = FastAPI()
 
     @app.middleware("http")
@@ -37,8 +37,12 @@ def create(requests: list[str], robots: str = "User-agent: *\nAllow: /\n") -> Fa
         return await call_next(request)
 
     @app.get("/robots.txt", response_class=PlainTextResponse)
-    def robots_txt() -> str:
-        return robots
+    def robots_txt(request: Request) -> PlainTextResponse:
+        if robots is None:  # no robots.txt at all
+            return PlainTextResponse("", status_code=404)
+        if "BookingResearch" not in request.headers.get("user-agent", ""):  # like sites that refuse Python's default
+            return PlainTextResponse("", status_code=403)
+        return PlainTextResponse(robots)
 
     @app.get("/travel/flights", response_class=HTMLResponse)
     def search(request: Request, q: str, curr: str) -> HTMLResponse:

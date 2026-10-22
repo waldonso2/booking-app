@@ -56,8 +56,16 @@ def test_robots_txt_that_disallows_stops_before_the_browser(tmp_path):
     assert r.status == "robots" and requests == ["/robots.txt"]
 
 
+def test_robots_txt_is_fetched_under_the_studys_name_and_a_missing_one_closes_nothing():
+    with serve(fakesite.create([])) as url:
+        assert measure.allowed(url + "/travel/flights")
+    with serve(fakesite.create([], robots=None)) as url:
+        assert measure.allowed(url + "/travel/flights")
+
+
 def test_unreachable_robots_txt_allows_nothing():
     assert not measure.allowed("http://127.0.0.1:9/travel/flights")
+    assert not measure.allowed("file:///etc/passwd")
 
 
 def test_a_block_page_is_a_result(fake, tmp_path):
