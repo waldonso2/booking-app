@@ -164,20 +164,19 @@ class Check24:
         page.locator("select[name=classOfService]").select_option(label=self.CLASSES[q.cabin])
         self._airport(page, "#fl-airportOrigin1", q.origin)
         self._airport(page, "#fl-airportDestination1", q.destination)
-        _trace(page, out, "airports")
         page.locator("#fl-day-picker-type-outbound").click()
         page.wait_for_timeout(1500)
-        _trace(page, out, "date picker")
-        page.locator("[data-testid=next_month_btn]").click()
-        _trace(page, out, "next month")
         for day in (q.depart, q.back):
             self._day(page, day)
         done = page.get_by_role("button", name=re.compile(r"^(Übernehmen|Fertig|OK|Bestätigen)$"))
         if done.count():
             done.first.click()
-        _trace(page, out, "days")
         result.cabin_shown = self.CLASSES[q.cabin] in page.inner_text("body")
-        page.get_by_role("button", name=re.compile(r"^Suchen$")).first.click()
+        start = page.url
+        page.locator("[data-testid=search_form_primary_button]").click()
+        page.wait_for_url(lambda url: url != start, timeout=WAIT_MS)
+        page.wait_for_timeout(8000)  # the offers arrive one after another
+        _trace(page, out, "results")
         _snapshot(page, result, out, "Ergebnisse", price=PRICE_DE)
 
     @staticmethod
