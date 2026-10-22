@@ -81,7 +81,7 @@ Geprüft am 22.10.2026, je Seite ein Abruf der Startseite von einem GitHub-Runne
 - Google Flights zeigt in **keinem** Land einen der lokalen Verkäufer der Soll-Liste; die einzige Ausnahme sind die
   Etraveli-Marken (Mytrip, Flightnetwork, Flybillet), die je Land wechseln. Auch Expedia, Booking.com und Trip.com
   fehlen überall.
-- Rund ein Drittel der Soll-Verkäufer blockt automatische Abrufe schon auf der Startseite, darunter alle
+- 37 der 95 geprüften Seiten (rund 40 %) blocken automatische Abrufe schon auf der Startseite, darunter alle
   Expedia-Länderseiten, Austrian, SWISS, Trailfinders, lastminute.com und Booking.com. Trip.com und EaseMyTrip leiten
   Besucher aus den USA auf ihre US-Seite um – auch das ist Point-of-Sale-Steuerung, nur über den Standort.
 - Ob die lokalen Verkäufer bei Google für diese Business-Strecke gar nicht anbieten oder ob Google sie bei Zugriff aus
