@@ -205,7 +205,13 @@ TRACE_JS = """(label) => {
   const clean = h => h.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 6000);
   const layers = [...document.querySelectorAll("[class*='fl-z-'], [role=dialog], [role=listbox]")]
     .filter(el => el.getClientRects().length && (el.innerText || "").trim().length > 30).slice(0, 4);
-  return [`### ${label} url=${location.href}`, "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
+  const ids = {};
+  document.querySelectorAll("[data-testid]").forEach(el => {
+    const k = el.tagName.toLowerCase() + "." + el.dataset.testid; ids[k] = (ids[k] || 0) + 1; });
+  const card = [...document.querySelectorAll("[data-testid]")].find(el => /10:30/.test(el.innerText || "")
+    && /€/.test(el.innerText || "") && (el.innerText || "").length < 900);
+  return [`### ${label} url=${location.href}`, Object.entries(ids).map(([k, n]) => `${k}=${n}`).join(" "),
+    "card=" + (card ? clean(card.outerHTML) : ""), "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
     "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
     "dest=" + document.querySelector("#fl-airportDestination1")?.value,
     "chips=" + [...document.querySelectorAll("[data-testid=selected_airport_list]")].map(e => e.innerText).join(" | "),
