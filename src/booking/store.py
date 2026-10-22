@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -81,6 +82,15 @@ def prices(db: sqlite3.Connection, query: str) -> list[sqlite3.Row]:
         " ORDER BY eur IS NULL, CAST(eur AS REAL) DESC, country", (query,)).fetchall()
 
 
+# "Book with GotogateMX$86,874ContinueView options" → "Gotogate": the name ends where Google's labels run on.
+SELLER = re.compile(r"Book with (.+?)(?=Airline\b|Continue|[A-Z]{1,3}[$€£¥₹₩₪₱]|[$€£¥₹₩₪₱]|[A-Z]{3} \d| ·|$)")
+
+
+def seller(label: str) -> str:
+    m = SELLER.match(label)
+    return m.group(1).strip() if m else label.split(" · ")[0][:60]
+
+
 def report(db: sqlite3.Connection, step: str = "Buchungsoptionen") -> str:
     """Markdown per query: every price of the last step highest first, the cheapest per country, and failed runs."""
     out = []
@@ -88,14 +98,21 @@ def report(db: sqlite3.Connection, step: str = "Buchungsoptionen") -> str:
         rows = [p for p in prices(db, q["query"]) if p["step"] == step]
         out += [f"## {q['query']}", "", "| # | EUR | Preis | Land | Anbieter |", "|---|---|---|---|---|"]
         out += [f"| {i} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | {p['country']} | "
-                f"{p['label'].split(' · ')[0][:60]} |" for i, p in enumerate(rows, 1)]
+                f"{seller(p['label'])} |" for i, p in enumerate(rows, 1)]
         cheapest: dict[str, sqlite3.Row] = {}
         for p in rows:  # highest first, so the last one per country is its cheapest
             cheapest[p["country"]] = p
         best = sorted(cheapest.values(), key=lambda p: float(p["eur"] or "inf"))
         out += ["", "Günstigster Preis je Land:", "", "| Land | EUR | Preis | Anbieter |", "|---|---|---|---|"]
         out += [f"| {p['country']} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | "
-                f"{p['label'].split(' · ')[0][:60]} |" for p in best]
+                f"{seller(p['label'])} |" for p in best]
+        sellers: dict[str, set[str]] = {}
+        for p in rows:
+            sellers.setdefault(p["country"], set()).add(seller(p["label"]))
+        everywhere = set.intersection(*sellers.values()) if sellers else set()
+        out += ["", f"Anbieter je Land (in allen Ländern: {', '.join(sorted(everywhere)) or 'keiner'}):", "",
+                "| Land | weitere Anbieter |", "|---|---|"]
+        out += [f"| {c} | {', '.join(sorted(names - everywhere)) or '–'} |" for c, names in sorted(sellers.items())]
         failed = [f"{r['country']} ({r['status']})" for r in runs(db, q["query"]) if r["status"] != "ok"]
         out += ["", f"Läufe: {len(runs(db, q['query']))}, ohne Ergebnis: {', '.join(failed) or 'keine'}", ""]
     return "\n".join(out)

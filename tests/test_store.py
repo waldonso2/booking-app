@@ -70,12 +70,24 @@ def test_cli_import(monkeypatch, tmp_path, capsys):
     assert "2 Läufe importiert" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(("label", "name"), [
+    ("Book with GotogateMX$86,874ContinueView options", "Gotogate"), ("Book with Gulf AirAirline · €2,485", "Gulf Air"),
+    ("Book with GotogateCHF 3,837ContinueView options", "Gotogate"), ("Book with Tripado · €4,132", "Tripado"),
+    ("Book with business-class.com · €4,022", "business-class.com"), ("Book with Gotogate₪14,374Continue", "Gotogate"),
+    ("Book with MytripR$23,431ContinueView options", "Mytrip"), ("Book with UnitedAirline · Local price", "United"),
+    ("Something else entirely", "Something else entirely"),
+])
+def test_seller_names_from_googles_labels(label, name):
+    assert store.seller(label) == name
+
+
 def test_report_lists_the_booking_options_highest_first_and_the_cheapest_per_country(tmp_path, capsys):
     db = store.connect(seeded(tmp_path / "m.db"))
     text = store.report(db)
-    assert "| 1 | 3900.00 | 4231.50 USD | US | Book with Testair |" in text
-    assert "| US | 3900.00 | 4231.50 USD | Book with Testair |" in text
+    assert "| 1 | 3900.00 | 4231.50 USD | US | Testair |" in text
+    assert "| US | 3900.00 | 4231.50 USD | Testair |" in text
     assert "ohne Ergebnis: JP (blocked)" in text
+    assert "in allen Ländern: Testair" in text and "| US | – |" in text
 
 
 def test_cli_report(monkeypatch, tmp_path, capsys):
