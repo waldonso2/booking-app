@@ -54,8 +54,9 @@ Bedienung auf Deutsch oder Englisch, unabhängig von der Sprache des POS; Optik 
 Google Flights zeigt in allen 40 Ländern fast dieselben 5–7 Anbieter (Ergebnis 21.10.2026); lokale Verkäufer fehlen.
 
 - [x] Bericht: Anbieter je Land (`booking-app report`)
-- [ ] Soll-Liste: je Land die 3–5 wichtigsten Verkäufer (Airline-Länderseite, lokale Reisebüros) und Vergleich mit
-      Google
+- [x] Soll-Liste: je Land die wichtigsten Verkäufer und Vergleich mit Google ([SOLL-ANBIETER.md](SOLL-ANBIETER.md))
+- [x] Auswahl für die direkte Messung (Lufthansa-Länderseiten, Opodo, Check24, Netflights, Priceline, PriceTravel,
+      MaxMilhas, Ticket, Pelikan)
 - [ ] Direkte Messung einzelner Verkäufer (Airline-Länderseiten, ein lokales Reisebüro je Region), Halt vor der Zahlung
 - [ ] Konsolidator-Tarife über eine eigene Agentur: [AGENTUR.md](AGENTUR.md)
 

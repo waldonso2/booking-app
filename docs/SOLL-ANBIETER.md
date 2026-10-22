@@ -88,12 +88,50 @@ Geprüft am 22.10.2026, je Seite ein Abruf der Startseite von einem GitHub-Runne
   den USA ausblendet, ist **offen** – das klären die Messung mit VMs im Land und die direkte Abfrage (Projektplan,
   Phase 1b).
 
+## Auswahl für die direkte Messung
+
+Grundlage: Seite erreichbar (oben) und `robots.txt` erlaubt die Flugsuche – das Messwerkzeug startet sonst nicht
+(Messregeln). Geprüft am 22.10.2026: die Regeln für alle Programme (`User-agent: *`), die Flug-, Such- oder
+Buchungspfade sperren.
+
+### Ausgewählt
+
+| Verkäufer | Märkte | Warum | robots.txt |
+|---|---|---|---|
+| **Lufthansa** (Länderseiten) | alle 40 | derselbe Verkäufer und derselbe Flug in jedem Markt – der sauberste Vergleich je Point of Sale; zugleich die Airline des gemessenen Flugs | keine Sperre für Flug/Suche |
+| **Opodo** | DE, FR, GB | ein Reisebüro mit eigenen Länderseiten: derselbe Verkäufer über drei Märkte | sperrt nur Angebotsseiten, nicht die Suche – Suchpfad beim Bau prüfen |
+| **Check24 Flüge** | DE | größtes deutsches Vergleichs- und Buchungsportal | sperrt nur Flugstatus und Umbuchung |
+| **Netflights** | GB | Flugspezialist in Großbritannien | sperrt nur Hotelpfade |
+| **Priceline** | US | großes US-Reisebüro (Booking Holdings) | sperrt Hotel- und Mietwagenbuchung, nicht die Flugsuche |
+| **PriceTravel** | MX | lokales Reisebüro Mexiko (Despegar sperrt die Suche) | keine Sperren |
+| **MaxMilhas** | BR | lokales Reisebüro Brasilien | keine Sperren |
+| **Ticket** | SE (auch NO) | lokales Reisebüro Skandinavien | keine Sperren |
+| **Pelikan** | CZ | lokales Reisebüro Tschechien | keine Sperren |
+
+### Nicht ausgewählt: robots.txt sperrt die Flugsuche
+
+fluege.de (`/search/`, `/flight/`), eDreams (`/engine/ItinerarySearch/search`), Flight Centre (`/search`),
+CheapOair (`/air/`), Cleartrip (`/flights/search*`), Trip.com (Suchergebnisse, Passagierschritt), Agoda
+(`/flights/results`), Travelstart (`/search`), Supersaver (`/air/*`), eSky (`/flights/search*`), Ophir Tours
+(Flugsuche), Despegar (`/search/`). Ohne lesbare robots.txt (gilt nach den Messregeln als Sperre): Modetour (403),
+MakeMyTrip (Zeitüberschreitung), Traveloka (405); Webjet nicht eindeutig.
+
+### Lücken
+
+- **Asien und Afrika:** Für IN, JP, KR, Südostasien und ZA erlaubt kein geprüfter lokaler Verkäufer die Flugsuche.
+  Dort messen nur die Lufthansa-Länderseiten und Google Flights.
+- **Risiko Lufthansa:** Austrian und SWISS (selber Konzern) blocken schon die Startseite. Erster Schritt ist deshalb
+  ein einzelner Testlauf auf lufthansa.com; blockt sie, ist das ein Ergebnis, und die Auswahl schrumpft auf die
+  Reisebüros.
+- Gulf Air (für FRA–MNL) ist noch nicht geprüft.
+
 ## Nächste Schritte
 
 - [x] Einträge ohne Quelle geprüft (je Seite ein Abruf, 22.10.2026)
 - [ ] Für die blockenden Seiten (⛔) klären, ob eine Messung überhaupt möglich ist, oder Kontakt zum Betreiber
-- [ ] Je Region 1–2 Verkäufer für die direkte Messung auswählen, z. B. Check24 (DE), MakeMyTrip (IN), Despegar (MX),
-      Traveloka (ID), Expedia (US) und die Lufthansa-Länderseiten
+- [x] Verkäufer für die direkte Messung ausgewählt (oben)
+- [ ] Testlauf lufthansa.com (ein Markt, Halt vor der Zahlung)
+- [ ] Je ausgewähltem Verkäufer einen Messablauf bauen, gegen eine nachgebaute Seite testen
 - [ ] Liste als Datei für den Bericht, damit `booking-app report` „Soll gesehen / fehlt“ selbst ausweist
 
 ## Quellen
