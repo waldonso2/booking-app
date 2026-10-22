@@ -164,11 +164,11 @@ class Check24:
             necessary.first.click()
         page.locator("input[name=flightType][value=rt]").check(force=True)
         page.locator("select[name=classOfService]").select_option(label=self.CLASSES[q.cabin])
-        self._airport(page, "#fl-airportOrigin1", q.origin)
-        self._airport(page, "#fl-airportDestination1", q.destination)
+        self._airport(page, "#fl-airportOrigin1", q.origin, out)
+        self._airport(page, "#fl-airportDestination1", q.destination, out)
         page.locator("#fl-day-picker-type-outbound").click()
         page.wait_for_timeout(1500)
-        (out / "trace.txt").write_text(page.evaluate(TRACE_JS), encoding="utf-8")  # DEBUG
+        _trace(page, out, "date picker")
         for day in (q.depart, q.back):
             self._day(page, day)
         done = page.get_by_role("button", name=re.compile(r"^(Übernehmen|Fertig|OK|Bestätigen)$"))
@@ -179,11 +179,14 @@ class Check24:
         _snapshot(page, result, out, "Ergebnisse", price=PRICE_DE)
 
     @staticmethod
-    def _airport(page: Page, field: str, code: str) -> None:
+    def _airport(page: Page, field: str, code: str, out: Path) -> None:
         box = page.locator(field)
         box.click()
+        page.wait_for_timeout(1000)
+        _trace(page, out, f"clicked {field}")
         box.fill(code)
         page.wait_for_timeout(1500)  # the suggestions
+        _trace(page, out, f"filled {field}")
         option = page.get_by_role("option").filter(has_text=code)
         if option.count():
             option.first.click()
@@ -204,10 +207,21 @@ class Check24:
         raise TimeoutError(f"no day {day} in the calendar")
 
 
-TRACE_JS = """() => ["origin=" + document.querySelector("#fl-airportOrigin1").value,
-  "dest=" + document.querySelector("#fl-airportDestination1").value,
-  ...[...document.querySelectorAll(".fl-fixed.fl-inset-0")].map(el => (el.parentElement.outerHTML || "")
-    .replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 12000))].join("\\n\\n")"""
+TRACE_JS = """(label) => {
+  const a = document.activeElement;
+  const clean = h => h.replace(/<svg[\\s\\S]*?<\\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").slice(0, 4000);
+  const layers = [...document.querySelectorAll("[class*='fl-z-'], [role=dialog], [role=listbox]")]
+    .filter(el => el.getClientRects().length && (el.innerText || "").trim()).slice(0, 6);
+  return [`### ${label} url=${location.href}`, "active=" + (a ? a.outerHTML.slice(0, 300) : ""),
+    "origin=" + document.querySelector("#fl-airportOrigin1")?.value,
+    "dest=" + document.querySelector("#fl-airportDestination1")?.value,
+    ...layers.map(el => clean(el.outerHTML))].join("\\n") + "\\n\\n";
+}"""
+
+
+def _trace(page: Page, out: Path, label: str) -> None:  # DEBUG
+    with (out / "trace.txt").open("a", encoding="utf-8") as f:
+        f.write(page.evaluate(TRACE_JS, label))
 
 
 SITES: dict[str, type[GoogleFlights | Check24]] = {"google-flights": GoogleFlights, "check24": Check24}
