@@ -176,8 +176,15 @@ class Check24:
         page.locator("[data-testid=search_form_primary_button]").click()
         page.wait_for_url(lambda url: url != start, timeout=WAIT_MS)
         page.wait_for_timeout(8000)  # the offers arrive one after another
-        _trace(page, out, "results")
-        _snapshot(page, result, out, "Ergebnisse", price=PRICE_DE)
+        rows = _snapshot(page, result, out, "Ergebnisse", selector=OFFER, price=PRICE_DE)
+        pages = len(page.context.pages)
+        page.locator(f'[data-booking-row="{_pick(rows, q.origin, pick)}"] [data-testid=offer_primary_button]').click()
+        page.wait_for_timeout(5000)
+        if len(page.context.pages) > pages:  # the offer opened in a tab of its own
+            page = page.context.pages[-1]
+            page.wait_for_load_state()
+        _trace(page, out, "offer")
+        _snapshot(page, result, out, "Angebot", rows, price=PRICE_DE)
 
     @staticmethod
     def _airport(page: Page, field: str, code: str) -> None:
@@ -247,6 +254,8 @@ ROWS_JS = """([source, selector]) => {
 BOOKING = re.compile(r"/booking")
 # A flight in Google Flights' lists: the link over its row, named "From 4293 US dollars ... Select flight".
 FLIGHT = '[role=link][aria-label*="Select flight"]'
+# An offer's price in CHECK24's result list (the filters beside it carry prices too).
+OFFER = "[data-testid=price_formatted]"
 # A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
 SELLER = 'span[role=text][aria-label][data-gs]:not([data-gs=""])'
 
