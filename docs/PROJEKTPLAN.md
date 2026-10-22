@@ -49,6 +49,16 @@ Bedienung auf Deutsch oder Englisch, unabhängig von der Sprache des POS; Optik 
 - [x] Umrechnung in EUR mit dem Tageskurs zum Messzeitpunkt (Quelle: EZB-Referenzkurse)
 - [x] Tests mit nachgebauten Seiten (keine echten Seiten in der CI)
 
+## Phase 1b – Die richtigen Anbieter je Markt
+
+Google Flights zeigt in allen 40 Ländern fast dieselben 5–7 Anbieter (Ergebnis 21.10.2026); lokale Verkäufer fehlen.
+
+- [x] Bericht: Anbieter je Land (`booking-app report`)
+- [ ] Soll-Liste: je Land die 3–5 wichtigsten Verkäufer (Airline-Länderseite, lokale Reisebüros) und Vergleich mit
+      Google
+- [ ] Direkte Messung einzelner Verkäufer (Airline-Länderseiten, ein lokales Reisebüro je Region), Halt vor der Zahlung
+- [ ] Konsolidator-Tarife über eine eigene Agentur: [AGENTUR.md](AGENTUR.md)
+
 ## Phase 2 – Oberfläche
 
 - [ ] Suche: Von, Nach, Datum(e), Personen, Klasse, Auswahl der Länder – DE/EN
