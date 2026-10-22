@@ -28,6 +28,14 @@ on:
       pick:
         description: Text des Hinflugs, der in jedem Land weiterverfolgt wird (leer = erster der Strecke)
         default: "10:30 AM"
+      site:
+        description: Seite (google-flights, check24)
+        default: google-flights
+      countries:
+        description: Länder als JSON-Liste
+        default: >-
+          ["AT","AU","BE","BG","BR","CA","CH","CZ","DE","DK","ES","FI","FR","GB","GR","HK","HU","ID","IE","IL",
+          "IN","IS","IT","JP","KR","MX","MY","NL","NO","NZ","PH","PL","PT","RO","SE","SG","TH","TR","US","ZA"]
 
 permissions:
   contents: read
@@ -39,8 +47,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        country: [AT, AU, BE, BG, BR, CA, CH, CZ, DE, DK, ES, FI, FR, GB, GR, HK, HU, ID, IE, IL,
-                  IN, IS, IT, JP, KR, MX, MY, NL, NO, NZ, PH, PL, PT, RO, SE, SG, TH, TR, US, ZA]
+        country: ${{ fromJSON(inputs.countries) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,11 +68,13 @@ jobs:
           RETURN: ${{ inputs.return }}
           CABIN: ${{ inputs.cabin }}
           PICK: ${{ inputs.pick }}
+          SITE: ${{ inputs.site }}
         # A country without a result is a result too: the job stays green and "report" lists it.
         run: |
-          booking-app measure --country "$COUNTRY" --from "$FROM" --to "$TO" --depart "$DEPART" --return "$RETURN" \
+          booking-app measure --site "$SITE" --country "$COUNTRY" --from "$FROM" --to "$TO" --depart "$DEPART" --return "$RETURN" \
             --cabin "$CABIN" --contact "$CONTACT" --pick "$PICK" --out "runs/$COUNTRY" || true
           python -c 'import json, sys; r = json.load(open(sys.argv[1])); print("==", r["status"], r["error"][:300]); [print("==", s["name"], len(s["rows"])) for s in r["steps"]]' "runs/$COUNTRY/result.json"
+          head -c 6000 "runs/$COUNTRY/error.txt" 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
