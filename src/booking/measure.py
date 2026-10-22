@@ -3,6 +3,7 @@ last price shown before booking. Nothing is booked: every flow ends on a page th
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import urllib.error
@@ -11,7 +12,7 @@ import urllib.robotparser
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import quote, urlsplit
 
 from playwright.sync_api import Page, sync_playwright
@@ -32,7 +33,9 @@ AGENT = "BookingResearch/0.1"  # the token robots.txt rules are read for
 # Only the study's currency codes count as a marker: any three capitals would take an airport ("YYZ1 stop") for one.
 PRICE = re.compile(r"(?<![A-Za-z])(?:[A-Z]{1,3}\$|[€$£¥₹₩₪₱]|" + "|".join(sorted(set(COUNTRIES.values()))) + r"|R)\s?"
                    r"((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)(?![\d,:])")
-BLOCKED = ("unusual traffic", "captcha", "not a robot")
+# A price as German sites show it: "2.345 €", "2.290,50 €".
+PRICE_DE = re.compile(r"(?<![\d.,])((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{2})?)\s?(?:€|EUR)(?![A-Za-z])")
+BLOCKED = ("unusual traffic", "captcha", "not a robot", "you have been blocked")
 WAIT_MS = 30_000
 
 
@@ -85,18 +88,20 @@ class Result:
     steps: list[Step] = field(default_factory=list)
 
 
-def parse_rows(texts: list[str], currency: str, spoken: list[str] | None = None) -> list[dict[str, str]]:
+def parse_rows(texts: list[str], currency: str, spoken: list[str] | None = None,
+               price: re.Pattern[str] = PRICE) -> list[dict[str, str]]:
     """A row's text → its price and a label (the rest of the row, one line). Where the row's price element names its
     amount for screen readers ("4630 US dollars"), that amount counts: the row may show others ("€4,123")."""
     rows = []
     for i, text in enumerate(texts):
-        m = PRICE.search(text)
+        m = price.search(text)
         said = re.search(r"\d[\d,]*(?:\.\d+)?", spoken[i]) if spoken and spoken[i] else None
         if not (m or said):
             continue
         rest = text[:m.start()] + text[m.end():] if m else text
         label = " · ".join(line.strip() for line in rest.splitlines() if line.strip())
-        amount = (said.group() if said else m.group(1) if m else "").replace(",", "")
+        amount = said.group().replace(",", "") if said else m.group(1) if m else ""
+        amount = amount.replace(".", "").replace(",", ".") if price is PRICE_DE else amount.replace(",", "")
         rows.append({"label": label[:200], "amount": amount, "currency": currency})
     return rows
 
@@ -136,6 +141,79 @@ class GoogleFlights:
         _snapshot(page, result, out, "Buchungsoptionen", rows, SELLER)
 
 
+class Check24:
+    """CHECK24 Flüge, a German point of sale: the search form as a person fills it → the result list → the picked
+    offer with its price checked once more. The flow stops there: "Zur Buchung" leads to the login and the
+    traveller's data (and Cloudflare blocked the measuring browser on that page, 22.10.2026)."""
+
+    name = "check24"
+    CLASSES: ClassVar[dict[str, str]] = {"economy": "Economy", "premium economy": "Premium Economy",
+                                         "business": "Business", "first": "First Class"}
+
+    def __init__(self, base: str = "https://flug.check24.de", settle_ms: int = 8000) -> None:
+        self.base = base.rstrip("/")
+        self.settle_ms = settle_ms  # the offers arrive one after another
+
+    def search_url(self, q: Query, country: str, currency: str) -> str:
+        """The result page the form leads to (robots.txt is checked for it)."""
+        return (f"{self.base}/search?from_0={q.origin}-A&to_0={q.destination}-A&date_0={q.depart}"
+                f"&from_1={q.destination}-A&to_1={q.origin}-A&date_1={q.back}&adt={q.adults}")
+
+    def run(self, page: Page, q: Query, result: Result, out: Path, pick: str = "") -> None:
+        page.goto(f"{self.base}/")
+        page.wait_for_timeout(2000)  # the cookie banner comes after load
+        necessary = page.get_by_text(re.compile(r"^Nur notwendige Cookies$"))
+        if necessary.count():  # the same choice as on Google: nothing beyond what the site needs
+            necessary.first.click()
+        page.locator("input[name=flightType][value=rt]").check(force=True)
+        page.locator("select[name=classOfService]").select_option(label=self.CLASSES[q.cabin])
+        self._airport(page, "#fl-airportOrigin1", q.origin)
+        self._airport(page, "#fl-airportDestination1", q.destination)
+        page.locator("#fl-day-picker-type-outbound").click()
+        for day in (q.depart, q.back):
+            self._day(page, day)
+        page.locator("[data-testid=search_form_primary_button]").click()
+        page.wait_for_url(re.compile(r"/search\?"), timeout=WAIT_MS)
+        page.wait_for_timeout(self.settle_ms)
+        rows = _snapshot(page, result, out, "Ergebnisse", selector=OFFER, price=PRICE_DE)
+        picked = _pick(rows, q.origin, pick)
+        page.locator(f'[data-booking-row="{picked}"] [data-testid=offer_primary_button]').click()
+        page.locator("[data-testid=price_and_cta_row]").wait_for(timeout=WAIT_MS)
+        # "Einen Moment bitte, das Angebot wird geprüft…": the price may change once checked. If the message stays,
+        # it stays in the row's label.
+        with contextlib.suppress(PlaywrightTimeout):
+            page.locator("[data-testid=pricing_delayed_message]").wait_for(state="hidden", timeout=WAIT_MS)
+        classes = " ".join(page.locator("[data-testid=carrier_details_class_of_service]").all_inner_texts())
+        result.cabin_shown = self.CLASSES[q.cabin].lower() in classes.lower()
+        _snapshot(page, result, out, "Angebot", rows, MODAL, PRICE_DE)
+        flight = parse_rows([rows[picked]], result.currency, price=PRICE_DE)[0]["label"]
+        for row in result.steps[-1].rows:  # CHECK24 sells it itself; the label names the flight
+            row["label"] = f"CHECK24 · {flight} · {row['label']}"[:200]
+
+    @staticmethod
+    def _airport(page: Page, field: str, code: str) -> None:
+        """Types the code and picks the suggestion with exactly that code (the first one is not always it)."""
+        page.locator(field).click()
+        page.locator(field).fill(code)
+        page.locator("li[data-testid^=airport_item_]").filter(
+            has=page.locator("[data-testid=airport_iata]", has_text=re.compile(f"^{code}$"))).first.click()
+        page.wait_for_timeout(500)
+
+    @staticmethod
+    def _day(page: Page, day: date) -> None:
+        cell = page.locator(f'td[data-day="{day.isoformat()}"] button')
+        for _ in range(24):  # month by month to the day
+            if cell.count():
+                cell.first.click()
+                return
+            page.locator("[data-testid=next_month_btn]").click()
+            page.wait_for_timeout(300)
+        raise TimeoutError(f"no day {day} in the calendar")
+
+
+SITES: dict[str, type[GoogleFlights | Check24]] = {"google-flights": GoogleFlights, "check24": Check24}
+
+
 # Marks each row and returns its text and the spoken price. With a selector, each match anchors a row: the largest
 # element around it holding no other match. Without, the rows are the largest elements holding exactly one price.
 ROWS_JS = """([source, selector]) => {
@@ -156,6 +234,10 @@ ROWS_JS = """([source, selector]) => {
 BOOKING = re.compile(r"/booking")
 # A flight in Google Flights' lists: the link over its row, named "From 4293 US dollars ... Select flight".
 FLIGHT = '[role=link][aria-label*="Select flight"]'
+# An offer's price in CHECK24's result list (the filters beside it carry prices too).
+OFFER = "[data-testid=price_formatted]"
+# The opened offer: its flights and its price row, each a row of its own (the list behind it has neither).
+MODAL = "[data-testid=flight_details], [data-testid=price_and_cta_row]"
 # A seller's price among the booking options, named "4630 US dollars" (price insights have no data-gs).
 SELLER = 'span[role=text][aria-label][data-gs]:not([data-gs=""])'
 
@@ -165,10 +247,10 @@ ROWS_HTML = """(size) => [...document.querySelectorAll("[data-booking-row]")]
     .replace(/ (jslog|jsaction|data-ved)="[^"]*"/g, "").slice(0, size)).join("\\n----\\n")"""
 
 
-def _rows(page: Page, before: list[str] | None, selector: str) -> list[dict[str, str]]:
+def _rows(page: Page, before: list[str] | None, selector: str, price: re.Pattern[str]) -> list[dict[str, str]]:
     """The page's priced rows, once there are some and they differ from the previous step's."""
     for _ in range(WAIT_MS // 500):
-        rows: list[dict[str, str]] = page.evaluate(ROWS_JS, [PRICE.pattern, selector])
+        rows: list[dict[str, str]] = page.evaluate(ROWS_JS, [price.pattern, selector])
         if rows and [r["text"] for r in rows] != before:
             return rows
         body = page.inner_text("body").lower()
@@ -179,15 +261,16 @@ def _rows(page: Page, before: list[str] | None, selector: str) -> list[dict[str,
 
 
 def _snapshot(page: Page, result: Result, out: Path, name: str, before: list[str] | None = None,
-              selector: str = "") -> list[str]:
-    rows = _rows(page, before, selector)
+              selector: str = "", price: re.Pattern[str] = PRICE) -> list[str]:
+    rows = _rows(page, before, selector, price)
     texts = [r["text"] for r in rows]
     n = len(result.steps) + 1
     shot = f"{n}-{name}.png"
     page.screenshot(path=out / shot, full_page=True)
     (out / f"{n}-{name}.html").write_text(page.content(), encoding="utf-8")
     (out / f"{n}-{name}.rows.html").write_text(page.evaluate(ROWS_HTML, 3000), encoding="utf-8")  # what was read
-    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency, [r["spoken"] for r in rows])))
+    spoken = [r["spoken"] for r in rows]
+    result.steps.append(Step(name, page.url, shot, parse_rows(texts, result.currency, spoken, price)))
     return texts
 
 
@@ -246,7 +329,7 @@ def ip_country() -> str:
         return ""
 
 
-def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str, pick: str = "",
+def measure(site: GoogleFlights | Check24, q: Query, country: str, out: Path, contact: str, pick: str = "",
             chromium: str | None = None, locate: bool = True) -> Result:
     """Runs the site's flow from here and writes `result.json`, screenshots and page copies to `out`."""
     out.mkdir(parents=True, exist_ok=True)
@@ -273,7 +356,8 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
                 page.screenshot(path=out / "error.png", full_page=True)
             if result.status != "ok":  # what the page said and how its rows are built, to see why
                 rows = page.evaluate(ROWS_HTML, 1500)
-                (out / "error.txt").write_text(f"{page.url}\n\n{rows}\n\n{page.inner_text('body')}",
+                controls = "\n".join(json.dumps(c, ensure_ascii=False) for c in page.evaluate(CONTROLS_JS))
+                (out / "error.txt").write_text(f"{page.url}\n\n{rows}\n\n{controls}\n\n{page.inner_text('body')}",
                                                encoding="utf-8")
             browser.close()
     text = json.dumps(asdict(result), ensure_ascii=False, indent=1, default=str)
@@ -283,10 +367,13 @@ def measure(site: GoogleFlights, q: Query, country: str, out: Path, contact: str
 
 # Every control a person could use, with the name a screen reader gives it: what a new site's flow is built from.
 CONTROLS_JS = """() => [...document.querySelectorAll(
-  "input, select, textarea, button, a[href], [role=button], [role=combobox], [role=tab], [role=link]")]
-  .filter(el => el.offsetParent !== null).slice(0, 300).map(el => ({
+  "input, select, textarea, button, a[href], [role=button], [role=combobox], [role=tab], [role=link], " +
+  "[role=option], [role=gridcell], [role=dialog]")]
+  .filter(el => el.getClientRects().length).slice(0, 300).map(el => ({
     tag: el.tagName.toLowerCase(), role: el.getAttribute("role") || "", type: el.getAttribute("type") || "",
     id: el.id || "", name: el.getAttribute("name") || "",
+    data: [...el.attributes].filter(a => a.name.startsWith("data-")).slice(0, 3)
+      .map(a => `${a.name}=${a.value.slice(0, 40)}`).join(" "),
     label: (el.getAttribute("aria-label") || el.labels?.[0]?.innerText || el.innerText || el.value || "")
       .trim().slice(0, 80)}))"""
 

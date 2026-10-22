@@ -1,5 +1,6 @@
 """Import of the runs, EUR conversion, the order of the results, the CLI."""
 
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -46,7 +47,7 @@ def test_cli_measure_passes_the_query(monkeypatch, tmp_path, capsys):
     seen = {}
 
     def fake(site, q, country, out, contact, pick, chromium):
-        seen.update(q=q, country=country, contact=contact)
+        seen.update(q=q, country=country, contact=contact, site=site.name)
         return measure.Result("x", country, "USD", {}, "", "", status="ok")
 
     monkeypatch.setattr(measure, "measure", fake)
@@ -54,7 +55,10 @@ def test_cli_measure_passes_the_query(monkeypatch, tmp_path, capsys):
                      "--return", "2027-04-09", "--cabin", "business", "--contact", "a@example.org",
                      "--out", str(tmp_path)])
     assert code == 0 and seen["q"] == measure.Query("FRA", "ATL", date(2027, 3, 26), date(2027, 4, 9), "business")
-    assert "US: ok" in capsys.readouterr().out
+    assert seen["site"] == "google-flights" and "US: ok" in capsys.readouterr().out
+    cli.main(["measure", "--site", "check24", "--country", "DE", "--from", "FRA", "--to", "ATL", "--depart",
+              "2027-03-26", "--return", "2027-04-09", "--contact", "a@example.org", "--out", str(tmp_path)])
+    assert seen["site"] == "check24"
 
 
 def test_cli_rejects_a_bad_query(tmp_path):
@@ -101,3 +105,18 @@ def test_cli_probe_passes_the_url(monkeypatch, tmp_path, capsys):
                                                                               "final_url": url, "error": ""})
     assert cli.main(["probe", "https://example.org/", "--contact", "a@example.org", "--out", str(tmp_path)]) == 0
     assert "ok 200 https://example.org/" in capsys.readouterr().out
+
+
+def test_report_counts_check24s_checked_offer_as_its_last_price(tmp_path):
+    run = json.loads((FIXTURES / "US" / "result.json").read_text())
+    run.update(site="check24", country="DE", currency="EUR", steps=[
+        {"name": "Ergebnisse", "url": "u", "screenshot": "s",
+         "rows": [{"label": "10:30 FRA Lufthansa", "amount": "4122.79", "currency": "EUR"}]},
+        {"name": "Angebot", "url": "u", "screenshot": "s",
+         "rows": [{"label": "CHECK24 · 10:30 FRA Lufthansa · Zur Buchung", "amount": "4150.00", "currency": "EUR"}]}])
+    (tmp_path / "runs" / "DE").mkdir(parents=True)
+    (tmp_path / "runs" / "DE" / "result.json").write_text(json.dumps(run))
+    db = store.connect(tmp_path / "m.db")
+    store.import_runs(db, tmp_path / "runs", RATES)
+    text = store.report(db)
+    assert "| 1 | 4150.00 | 4150.00 EUR | DE | CHECK24 |" in text and "4122.79" not in text

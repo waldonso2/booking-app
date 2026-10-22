@@ -16,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="command", required=True)
     m = sub.add_parser("measure", help="one run from this machine's country")
     m.add_argument("--country", required=True, choices=sorted(measure.COUNTRIES))
+    m.add_argument("--site", default="google-flights", choices=sorted(measure.SITES))
     m.add_argument("--from", dest="origin", required=True)
     m.add_argument("--to", dest="destination", required=True)
     m.add_argument("--depart", required=True, type=date.fromisoformat)
@@ -40,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
             q = measure.Query(a.origin.upper(), a.destination.upper(), a.depart, a.back, a.cabin, a.adults)
         except ValueError as e:
             p.error(str(e))
-        r = measure.measure(measure.GoogleFlights(), q, a.country, a.out, a.contact, a.pick,
+        r = measure.measure(measure.SITES[a.site](), q, a.country, a.out, a.contact, a.pick,
                             os.environ.get("CHROMIUM_PATH") or None)
         print(f"{r.country}: {r.status} {r.error}".rstrip())
         return 0 if r.status == "ok" else 1
