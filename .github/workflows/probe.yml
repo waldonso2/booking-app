@@ -1,0 +1,49 @@
+name: Seite erkunden
+
+# Opens pages as a measurement would (robots.txt, block check) and keeps each page's controls, text and screenshot -
+# the starting point for building a seller's flow. Clicks nothing. Results: the run's log and the artifact "probe".
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: Seiten, durch Leerzeichen getrennt
+        required: true
+      contact:
+        description: Kontakt der Forschungsgruppe (steht im User-Agent)
+        required: true
+  push:
+    branches: [ccr-db7c1d22-itd9x5]  # shortcut: probes the Lufthansa pages while their flow is built, remove after
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: "pip install --require-hashes --only-binary :all: -r requirements.txt"
+      - run: pip install --no-deps --no-build-isolation -e .
+      - run: python -m playwright install --with-deps chromium
+      - name: probe
+        env:
+          URLS: ${{ inputs.urls || 'https://www.lufthansa.com/us/en/homepage https://www.lufthansa.com/de/de/homepage' }}
+          CONTACT: ${{ inputs.contact || 'www.contact.com' }}
+        run: |
+          n=0
+          for url in $URLS; do
+            n=$((n + 1))
+            booking-app probe "$url" --contact "$CONTACT" --out "probe/$n" || true
+            python -c 'import json, sys; f = json.load(open(sys.argv[1])); print("==", f["url"], f["status"], f.get("http"), f.get("final_url"), f.get("title"), f["error"]); [print("  ", c["tag"], c["role"], c["type"], c["id"], c["name"], "|", c["label"]) for c in f.get("controls", [])[:120]]' "probe/$n/probe.json"
+            head -c 3000 "probe/$n/page.txt" 2>/dev/null || true
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: probe
+          path: probe/
