@@ -177,14 +177,16 @@ class Check24:
         page.wait_for_url(lambda url: url != start, timeout=WAIT_MS)
         page.wait_for_timeout(8000)  # the offers arrive one after another
         rows = _snapshot(page, result, out, "Ergebnisse", selector=OFFER, price=PRICE_DE)
-        pages = len(page.context.pages)
         page.locator(f'[data-booking-row="{_pick(rows, q.origin, pick)}"] [data-testid=offer_primary_button]').click()
-        page.wait_for_timeout(5000)
-        if len(page.context.pages) > pages:  # the offer opened in a tab of its own
+        rows = _snapshot(page, result, out, "Angebot", rows, "[data-testid=price_and_cta_row]", PRICE_DE)
+        pages, start = len(page.context.pages), page.url
+        page.locator("[data-testid=go_to_booking]").click()
+        page.wait_for_timeout(8000)
+        if len(page.context.pages) > pages:  # the booking opened in a tab of its own
             page = page.context.pages[-1]
             page.wait_for_load_state()
-        _trace(page, out, "offer")
-        _snapshot(page, result, out, "Angebot", rows, price=PRICE_DE)
+        _trace(page, out, f"booking (from {start})")
+        _snapshot(page, result, out, "Buchung", rows, price=PRICE_DE)
 
     @staticmethod
     def _airport(page: Page, field: str, code: str) -> None:
