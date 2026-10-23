@@ -175,10 +175,11 @@ def test_check24_fills_the_form_reads_the_offers_and_stops_at_the_checked_offer(
     assert r.cabin_shown and not any(p.startswith("/buchung") for p in requests)
 
 
-def test_check24_takes_the_price_once_checked(tmp_path):
+def test_check24_takes_the_price_once_checked_in_euros_from_any_country(tmp_path):
     with serve(fakecheck24.create([])) as url:
-        r = run(url, tmp_path, site=Check24(url, settle_ms=200), country="DE")
+        r = run(url, tmp_path, site=Check24(url, settle_ms=200), country="PH")
     assert r.steps[1].rows[0]["amount"] == "4150.00"  # 4.122,79 € in the list, 4.150,00 € once checked
+    assert r.currency == "EUR" and r.steps[1].rows[0]["currency"] == "EUR"
 
 
 def test_check24_search_url_is_the_result_page():

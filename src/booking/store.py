@@ -77,7 +77,7 @@ def runs(db: sqlite3.Connection, query: str) -> list[sqlite3.Row]:
 def prices(db: sqlite3.Connection, query: str) -> list[sqlite3.Row]:
     """Every price measured for the query, highest first (in EUR; prices without a rate last)."""
     return db.execute(
-        "SELECT runs.country, runs.started, step, label, amount, prices.currency, eur FROM prices"
+        "SELECT runs.country, runs.ip_country, runs.started, step, label, amount, prices.currency, eur FROM prices"
         " JOIN runs ON prices.run = runs.id WHERE query = ?"
         " ORDER BY eur IS NULL, CAST(eur AS REAL) DESC, country", (query,)).fetchall()
 
@@ -96,10 +96,11 @@ FINAL = ("Buchungsoptionen", "Angebot")
 
 
 def report(db: sqlite3.Connection, steps: tuple[str, ...] = FINAL) -> str:
-    """Markdown per query: every price of the last step highest first, the cheapest per country, and failed runs."""
+    """Markdown per query: every price of the last step highest first, the cheapest per country, and failed runs.
+    Only runs from inside their country count: a run whose address lies elsewhere is listed, not ranked."""
     out = []
     for q in queries(db):
-        rows = [p for p in prices(db, q["query"]) if p["step"] in steps]
+        rows = [p for p in prices(db, q["query"]) if p["step"] in steps and p["ip_country"] in ("", p["country"])]
         out += [f"## {q['query']}", "", "| # | EUR | Preis | Land | Anbieter |", "|---|---|---|---|---|"]
         out += [f"| {i} | {p['eur'] or '–'} | {p['amount']} {p['currency']} | {p['country']} | "
                 f"{seller(p['label'])} |" for i, p in enumerate(rows, 1)]
@@ -118,5 +119,8 @@ def report(db: sqlite3.Connection, steps: tuple[str, ...] = FINAL) -> str:
                 "| Land | weitere Anbieter |", "|---|---|"]
         out += [f"| {c} | {', '.join(sorted(names - everywhere)) or '–'} |" for c, names in sorted(sellers.items())]
         failed = [f"{r['country']} ({r['status']})" for r in runs(db, q["query"]) if r["status"] != "ok"]
-        out += ["", f"Läufe: {len(runs(db, q['query']))}, ohne Ergebnis: {', '.join(failed) or 'keine'}", ""]
+        outside = [f"{r['country']} (IP {r['ip_country']})" for r in runs(db, q["query"])
+                   if r["ip_country"] and r["ip_country"] != r["country"]]
+        out += ["", f"Läufe: {len(runs(db, q['query']))}, ohne Ergebnis: {', '.join(failed) or 'keine'}",
+                f"Nicht aus dem Land gemessen (nicht gewertet): {', '.join(outside) or 'keine'}", ""]
     return "\n".join(out)

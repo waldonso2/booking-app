@@ -111,6 +111,7 @@ class GoogleFlights:
     there: the next click would leave for a seller's booking page."""
 
     name = "google-flights"
+    currency = ""  # the country's own (curr=)
 
     def __init__(self, base: str = "https://www.google.com") -> None:
         self.base = base.rstrip("/")
@@ -147,6 +148,7 @@ class Check24:
     traveller's data (and Cloudflare blocked the measuring browser on that page, 22.10.2026)."""
 
     name = "check24"
+    currency = "EUR"  # CHECK24 shows euros, from whatever country it is opened
     CLASSES: ClassVar[dict[str, str]] = {"economy": "Economy", "premium economy": "Premium Economy",
                                          "business": "Business", "first": "First Class"}
 
@@ -333,7 +335,7 @@ def measure(site: GoogleFlights | Check24, q: Query, country: str, out: Path, co
             chromium: str | None = None, locate: bool = True) -> Result:
     """Runs the site's flow from here and writes `result.json`, screenshots and page copies to `out`."""
     out.mkdir(parents=True, exist_ok=True)
-    currency = COUNTRIES[country]
+    currency = site.currency or COUNTRIES[country]
     result = Result(site.name, country, currency, {**asdict(q), "key": q.key},
                     datetime.now(UTC).isoformat(timespec="seconds"), "",
                     ip_country() if locate else "")

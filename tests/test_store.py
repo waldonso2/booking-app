@@ -92,6 +92,18 @@ def test_report_lists_the_booking_options_highest_first_and_the_cheapest_per_cou
     assert "| US | 3900.00 | 4231.50 USD | Testair |" in text
     assert "ohne Ergebnis: JP (blocked)" in text
     assert "in allen Ländern: Testair" in text and "| US | – |" in text
+    assert "Nicht aus dem Land gemessen (nicht gewertet): JP (IP SG)" in text
+
+
+def test_report_ranks_only_runs_from_inside_their_country(tmp_path):
+    run = json.loads((FIXTURES / "US" / "result.json").read_text())
+    run.update(country="DE", currency="EUR", ip_country="US")  # Google's "DE" from a US address
+    (tmp_path / "runs" / "DE").mkdir(parents=True)
+    (tmp_path / "runs" / "DE" / "result.json").write_text(json.dumps(run))
+    db = store.connect(tmp_path / "m.db")
+    store.import_runs(db, tmp_path / "runs", RATES)
+    text = store.report(db)
+    assert "| DE |" not in text and "Nicht aus dem Land gemessen (nicht gewertet): DE (IP US)" in text
 
 
 def test_cli_report(monkeypatch, tmp_path, capsys):
@@ -109,7 +121,7 @@ def test_cli_probe_passes_the_url(monkeypatch, tmp_path, capsys):
 
 def test_report_counts_check24s_checked_offer_as_its_last_price(tmp_path):
     run = json.loads((FIXTURES / "US" / "result.json").read_text())
-    run.update(site="check24", country="DE", currency="EUR", steps=[
+    run.update(site="check24", country="DE", currency="EUR", ip_country="DE", steps=[
         {"name": "Ergebnisse", "url": "u", "screenshot": "s",
          "rows": [{"label": "10:30 FRA Lufthansa", "amount": "4122.79", "currency": "EUR"}]},
         {"name": "Angebot", "url": "u", "screenshot": "s",
